@@ -18,6 +18,10 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  uid: {
+    type: String,
+    default: null
+  },
   sessions: [
     {
       deviceName: {

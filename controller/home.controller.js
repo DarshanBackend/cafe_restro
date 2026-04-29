@@ -6,6 +6,8 @@ import { sendError } from "../utils/responseUtils.js";
 import hotelBookingModel from "../model/hotel.booking.model.js";
 import axios from "axios";
 import stayModel from "../model/stay.model.js";
+import coupanModel from "../model/coupan.model.js";
+import offerModel from "../model/offer.model.js";
 
 export const WhatsNew = async (req, res) => {
   try {
@@ -414,4 +416,177 @@ const getDefaultIndianCityImage = (cityName) => {
 };
 
 // ================================================================================================================
-// GET /api/properties/browse-by-type
+// GET /api/home/coffee-dates
+export const getCoffeeDates = async (req, res) => {
+  try {
+    const limit = Number(req.query.limit) || 6;
+    const cafes = await cafeModel.find({ status: 'active' })
+      .sort({ averageRating: -1, createdAt: -1 })
+      .limit(limit);
+
+    const data = cafes.map(c => {
+       const obj = c.toObject();
+       let image = null;
+       if (obj.images && obj.images.length > 0) {
+         image = obj.images[0];
+       }
+       return {
+         id: obj._id,
+         name: obj.name,
+         image: image,
+         rating: obj.averageRating || 0,
+         location: obj.location?.city || "",
+         type: "cafe"
+       };
+    });
+
+    res.json({
+      success: true,
+      message: "Coffee dates fetched successfully",
+      data
+    });
+  } catch (error) {
+    console.error("Coffee dates error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+// ================================================================================================================
+// GET /api/home/browse-by-property-type
+export const getBrowseByPropertyTypes = async (req, res) => {
+  try {
+    const hotelCount = await hotelModel.countDocuments();
+    const restroCount = await restroModel.countDocuments({ status: "active" });
+    const cafeCount = await cafeModel.countDocuments({ status: "active" });
+    const hallCount = await hallModel.countDocuments({ isAvailable: true });
+
+    // Since we don't have distinct property type models, we use existing models and map them
+    // Fetch a sample image for each type
+    const hotelSample = await hotelModel.findOne({ images: { $ne: [] } }).select('images');
+    const restroSample = await restroModel.findOne({ 'images.featured': { $ne: null } }).select('images');
+    const cafeSample = await cafeModel.findOne({ images: { $ne: [] } }).select('images');
+    const hallSample = await hallModel.findOne({ 'images.featuredImage': { $ne: null } }).select('images');
+
+    const data = [
+      {
+        type: "Hotel",
+        count: hotelCount,
+        image: hotelSample?.images?.[0] || "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800"
+      },
+      {
+        type: "Restaurant",
+        count: restroCount,
+        image: restroSample?.images?.featured || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800"
+      },
+      {
+        type: "Cafe",
+        count: cafeCount,
+        image: cafeSample?.images?.[0] || "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=800"
+      },
+      {
+        type: "Hall",
+        count: hallCount,
+        image: hallSample?.images?.featuredImage || "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=800"
+      }
+    ];
+
+    res.json({
+      success: true,
+      message: "Property types fetched successfully",
+      data
+    });
+  } catch (error) {
+    console.error("Property types error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+// ================================================================================================================
+// GET /api/special-offers
+export const getSpecialOffers = async (req, res) => {
+  try {
+    const topOffer = await offerModel.findOne({ 
+        isActive: true 
+      })
+      .sort({ createdAt: -1 });
+
+    let discountText = "50% OFF";
+    let title = "Get Up to";
+    let subtitle = "on your dining";
+    let backgroundImage = "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800";
+
+    if (topOffer) {
+      if (topOffer.discountText) discountText = topOffer.discountText;
+      if (topOffer.title) title = topOffer.title;
+      if (topOffer.subtitle) subtitle = topOffer.subtitle;
+      if (topOffer.backgroundImage) backgroundImage = topOffer.backgroundImage;
+    }
+
+    const data = {
+      title,
+      discountText,
+      subtitle,
+      backgroundImage
+    };
+
+    res.json({
+      success: true,
+      message: "Special offers fetched successfully",
+      data
+    });
+  } catch (error) {
+    console.error("Special offers error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+// ================================================================================================================
+// GET /api/luxury-stays
+export const getLuxuryStays = async (req, res) => {
+  try {
+    const { city, limit = 4 } = req.query;
+    
+    // Build query
+    let query = {};
+    if (city) {
+      query["address.city"] = new RegExp(city, "i");
+    }
+
+    // Fetch from hotelModel, sorting by highest price or rating to simulate "luxury"
+    const luxuryHotels = await hotelModel.find(query)
+      .sort({ averageRating: -1 }) // Assuming luxury means highly rated or we could sort by price
+      .limit(parseInt(limit));
+      
+    const formatHotel = (hotel) => {
+       const obj = hotel.toObject();
+       return {
+         id: obj._id,
+         name: obj.name,
+         location: obj.address?.city || city || "Unknown",
+         image: obj.images && obj.images.length > 0 ? obj.images[0] : "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
+         rating: obj.averageRating || 5,
+         price: obj.priceRange?.min || obj.Rent || 0
+       };
+    };
+
+    let data = luxuryHotels.map(formatHotel);
+
+    // If no hotels found for the specific city, fallback to top generic ones
+    if (data.length === 0) {
+      const fallbackHotels = await hotelModel.find({})
+        .sort({ averageRating: -1 })
+        .limit(parseInt(limit));
+        
+      data = fallbackHotels.map(formatHotel);
+    }
+
+    res.json({
+      success: true,
+      message: "Luxury stays fetched successfully",
+      data
+    });
+  } catch (error) {
+    console.error("Luxury stays error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};

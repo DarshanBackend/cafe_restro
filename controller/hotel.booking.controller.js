@@ -197,9 +197,8 @@ export const previewHotelBooking = async (req, res) => {
 
     const numberOfNights = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
 
-    const TAX_PERCENT = 12;
-    const SERVICE_FEE = 100;
-    const PLATFORM_FEE = 50;
+    const TAX_PERCENT = 18;
+    const SERVICE_FEE = 5;
 
     const roomRatePerNight = room.pricePerNight;
     const totalRoomRate = roomRatePerNight * numberOfNights * numberOfRooms;
@@ -222,8 +221,6 @@ export const previewHotelBooking = async (req, res) => {
           discountPercent,
           description: coupon.description || "",
         };
-        console.log(discountAmount)
-        console.log(discountPercent)
       } else {
         couponDetails = { code: couponCode, message: "Invalid or inactive coupon" };
       }
@@ -231,7 +228,8 @@ export const previewHotelBooking = async (req, res) => {
 
     let subtotal = totalRoomRate - discountAmount;
     const taxAmount = (subtotal * TAX_PERCENT) / 100;
-    const totalAmount = subtotal + taxAmount + SERVICE_FEE + PLATFORM_FEE;
+    const serviceFee = (subtotal * SERVICE_FEE) / 100;
+    const totalAmount = subtotal + taxAmount + serviceFee;
 
     return res.status(200).json({
       success: true,
@@ -264,7 +262,6 @@ export const previewHotelBooking = async (req, res) => {
           taxPercent: TAX_PERCENT,
           taxAmount,
           serviceFee: SERVICE_FEE,
-          platformFee: PLATFORM_FEE,
           totalAmount: Number(totalAmount.toFixed(2)),
           currency: "INR",
         },

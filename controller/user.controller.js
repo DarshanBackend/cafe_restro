@@ -4,6 +4,7 @@ import { sendBadRequest, sendError, sendNotFound, sendSuccess } from "../utils/r
 import jwt from 'jsonwebtoken';
 import bcrypt from "bcryptjs";
 import transporter from "../utils/Email.config.js";
+import { uploadToS3, deleteFromS3 } from "../middleware/uploadS3.js";
 
 export const sendOtpEmail = async (email, name, otp) => {
   // Let errors propagate so callers can handle failures appropriately
@@ -149,14 +150,37 @@ export const updateUser = async (req, res) => {
     delete updates.email;
     delete updates.otp;
     delete updates.otpExpires;
-    String(req.body.gender).toLowerCase();
-    String(req.body.maritalStatus).toLowerCase();
+    
+    if (updates.gender) updates.gender = String(updates.gender).toLowerCase();
+    if (updates.maritalStatus) updates.maritalStatus = String(updates.maritalStatus).toLowerCase();
+
+    const user = await userModel.findById(id);
+    if (!user) return sendNotFound(res, "User not found");
+
+    if (req.file) {
+      // Upload new avatar to S3
+      updates.avatar = await uploadToS3(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype,
+        "users"
+      );
+      
+      // Delete old avatar from S3 if it exists and is an S3 url
+      if (user.avatar && user.avatar.includes(".amazonaws.com/")) {
+        try {
+          const key = user.avatar.split(".amazonaws.com/")[1];
+          if (key) await deleteFromS3(key);
+        } catch (err) {
+          log.error("Failed to delete old avatar from S3:", err.message);
+        }
+      }
+    }
+
     const updatedUser = await userModel.findByIdAndUpdate(id, updates, {
       new: true,
       runValidators: true,
     }).select("-password -otp -otpExpires");
-
-    if (!updatedUser) return sendNotFound(res, "User not found");
 
     return sendSuccess(res, updatedUser, "User updated successfully");
   } catch (error) {
@@ -179,16 +203,25 @@ export const deleteUser = async (req, res) => {
 
 export const googleLogin = async (req, res) => {
   try {
-    const { email, name, avatar, deviceName, ipAddress } = req.body;
+    const { email, name, avatar, uid, deviceName, ipAddress } = req.body;
 
     if (!email || !name) {
       return sendBadRequest(res, "Name and email are required");
     }
 
-    let user = await userModel.findOne({ email });
+    let query = { email };
+    if (uid) {
+      query = { $or: [{ uid: uid }, { email: email }] };
+    }
+
+    let user = await userModel.findOne(query);
     let isNew = false;
 
     if (user) {
+      // Update uid or avatar if they are missing
+      if (uid && !user.uid) user.uid = uid;
+      if (avatar && !user.avatar) user.avatar = avatar;
+
       const existingSession = user.sessions.find(
         s => s.deviceName === deviceName && s.ipAddress === ipAddress
       );
@@ -212,6 +245,7 @@ export const googleLogin = async (req, res) => {
       user = new userModel({
         name,
         email,
+        uid: uid || null,
         avatar: avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
         password: "SOCIAL_LOGIN",
         sessions: [
@@ -234,6 +268,7 @@ export const googleLogin = async (req, res) => {
       _id: user._id,
       name: user.name,
       email: user.email,
+      uid: user.uid,
       role: user.role,
     };
     const token = jwt.sign(payload, process.env.JWT_SECET, { expiresIn: "30d" });

@@ -23,9 +23,10 @@ import { cancelHallBooking, createHallBooking, getHallBookingById, getUserHallBo
 import { addNewEvent, bulkDeleteEvents, deleteEvent, getAllEvents, getEventById, getEventStats, updateEvent } from '../controller/event.controller.js';
 import { createTour, deleteTour, getAllTours, getBestOfferTours, getTourById, updateTour, updateTourImage, uploadTourImage } from '../controller/tour.controller.js';
 import { createCoupan, deleteCoupan, getAllCoupans, getCoupanById, toggleCoupanStatus, updateCoupan } from '../controller/coupan.controller.js';
+import { createOffer, deleteOffer, getAllOffers, getOfferById, toggleOfferStatus, updateOffer } from '../controller/offer.controller.js';
 import { getMyAllBookings, getMyRefundBooking } from '../controller/payments.controller.js';
 import { downloadBookingInvoice } from '../controller/invoice.controller.js';
-import { getTrendingDestinations, WhatsNew } from '../controller/home.controller.js';
+import { getTrendingDestinations, WhatsNew, getCoffeeDates, getBrowseByPropertyTypes, getSpecialOffers, getLuxuryStays } from '../controller/home.controller.js';
 import { createNotification, deleteNotification, getAllNotifications, getMyNotifications, getNotificationById, updateNotification } from '../controller/notification.controller.js';
 import { createStay, deleteStay, getAllStays, getStayById, updateStay } from '../controller/stay.controller.js';
 
@@ -43,7 +44,7 @@ indexRouter.post("/resetPassword", ResetPassword);
 // --------------------------------------------------------
 indexRouter.get("/getAllUsers", getAllUsers);
 indexRouter.get("/getUserById/:id", getUserById);
-indexRouter.put("/updateUser/:id", updateUser);
+indexRouter.put("/updateUser/:id", upload.single("avatar"), updateUser);
 indexRouter.delete("/deleteUser/:id", deleteUser);
 
 indexRouter.post("/changeUserPassword", UserAuth, changeUserPassword)
@@ -62,6 +63,11 @@ indexRouter.delete("/deleteAdmin/:adminId", deleteAdmin);
 //home Page api's
 indexRouter.get("/WhatsNew", WhatsNew)
 indexRouter.get('/trending-destinations', getTrendingDestinations);
+indexRouter.get('/coffee-dates', getCoffeeDates);
+indexRouter.get('/browse-by-property-type', getBrowseByPropertyTypes);
+indexRouter.get('/special-offers', getSpecialOffers);
+indexRouter.get('/luxury-stays', getLuxuryStays);
+
 
 
 
@@ -238,9 +244,17 @@ indexRouter.get("/getAllReviews", AdminAuth, getAllReviews);
 indexRouter.post("/createCoupan", AdminAuth, createCoupan);
 indexRouter.get("/getAllCoupans", getAllCoupans);
 indexRouter.get("/getCoupanById/:id", getCoupanById);
-indexRouter.put("/updateCoupan/:id", updateCoupan);
-indexRouter.delete("/deleteCoupan/:id", deleteCoupan);
-indexRouter.patch("/toggleCoupanStatus/:id", toggleCoupanStatus);
+indexRouter.put("/updateCoupan/:id", AdminAuth, updateCoupan);
+indexRouter.delete("/deleteCoupan/:id", AdminAuth, deleteCoupan);
+indexRouter.patch("/toggleCoupanStatus/:id", AdminAuth, toggleCoupanStatus);
+
+//offer section
+indexRouter.post("/createOffer", AdminAuth, upload.single("backgroundImage"), createOffer);
+indexRouter.get("/getAllOffers", getAllOffers);
+indexRouter.get("/getOfferById/:id", getOfferById);
+indexRouter.put("/updateOffer/:id", AdminAuth, upload.single("backgroundImage"), updateOffer);
+indexRouter.delete("/deleteOffer/:id", AdminAuth, deleteOffer);
+indexRouter.patch("/toggleOfferStatus/:id", AdminAuth, toggleOfferStatus);
 
 indexRouter.post("/createStay", upload.fields([{ name: "stayImage", maxCount: 1 }]), AdminAuth, createStay);
 indexRouter.put("/updateStay/:id", AdminAuth, upload.fields([{ name: "stayImage", maxCount: 1 }]), updateStay);
