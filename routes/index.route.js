@@ -68,7 +68,7 @@ indexRouter.get('/trending-destinations', getTrendingDestinations);
 
 //hotel section
 indexRouter.post("/createNewHotel", AdminAuth, uploadFiles, handleMulterErrors, processAndUploadImages, createNewHotel);
-indexRouter.get("/getAllHotels", AdminAuth, getAllHotels);
+indexRouter.get("/getAllHotels", getAllHotels);
 indexRouter.get("/getHotelById/:hotelId", getHotelById);
 // indexRouter.patch("/updateHotel",AdminAuth, updateHotel);
 indexRouter.delete("/deleteHotel/:hotelId", AdminAuth, deleteHotels);

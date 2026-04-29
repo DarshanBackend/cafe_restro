@@ -18,11 +18,46 @@ export const WhatsNew = async (req, res) => {
       hallModel.find().sort({ createdAt: -1 }).limit(limit),
     ]);
 
+    const normalizeImages = (item, type) => {
+      const obj = item.toObject();
+      let normalizedImages = {
+        featured: null,
+        gallery: [],
+        menu: []
+      };
+
+      if (obj.images) {
+        if (Array.isArray(obj.images)) {
+          if (obj.images.length > 0) {
+            normalizedImages.featured = obj.images[0];
+            normalizedImages.gallery = obj.images.slice(1);
+          }
+        } else if (type === 'hall') {
+          normalizedImages.featured = obj.images.featuredImage || null;
+          normalizedImages.gallery = obj.images.galleryImages || [];
+        } else if (type === 'restro') {
+          normalizedImages.featured = obj.images.featured || null;
+          normalizedImages.gallery = obj.images.gallery || [];
+          normalizedImages.menu = obj.images.menu || [];
+        } else {
+          normalizedImages.featured = obj.images.featured || obj.images.featuredImage || null;
+          normalizedImages.gallery = obj.images.gallery || obj.images.galleryImages || [];
+          normalizedImages.menu = obj.images.menu || [];
+        }
+      }
+
+      return {
+        ...obj,
+        type,
+        images: normalizedImages
+      };
+    };
+
     const combined = [
-      ...hotels.map((d) => ({ ...d.toObject(), type: "hotel" })),
-      ...restros.map((d) => ({ ...d.toObject(), type: "restro" })),
-      ...cafes.map((d) => ({ ...d.toObject(), type: "cafe" })),
-      ...halls.map((d) => ({ ...d.toObject(), type: "hall" })),
+      ...hotels.map((d) => normalizeImages(d, "hotel")),
+      ...restros.map((d) => normalizeImages(d, "restro")),
+      ...cafes.map((d) => normalizeImages(d, "cafe")),
+      ...halls.map((d) => normalizeImages(d, "hall")),
     ];
 
     combined.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
