@@ -12,7 +12,6 @@ export const createHallBooking = async (req, res) => {
       endDate,
       startTime,
       endTime,
-      promoCode,
       specialRequests
     } = req.body;
 
@@ -109,14 +108,21 @@ export const createHallBooking = async (req, res) => {
 
     const basePrice = hall.price * totalDays;
 
-    const discountPercentage = await calculateDiscount(promoCode, basePrice);
-    const discountAmount = (basePrice * discountPercentage) / 100;
+    let discountPercentage = req.body.discountPercentage || 0;
+    let discountAmount = req.body.discountAmount || 0;
 
-    const taxPercentage = 12;
-    const taxAmount = (basePrice * taxPercentage) / 100;
+    if (discountPercentage > 100) discountPercentage = 100;
+    if (discountAmount > basePrice) discountAmount = basePrice;
 
-    const serviceFee = 100; // Fixed service fee
-    const finalAmount = basePrice - discountAmount + taxAmount + serviceFee;
+    const subtotal = basePrice - discountAmount;
+
+    const taxPercentage = 18;
+    const taxAmount = (subtotal * taxPercentage) / 100;
+
+    const serviceFeePercentage = 5;
+    const serviceFeeAmount = (subtotal * serviceFeePercentage) / 100;
+
+    const finalAmount = subtotal + taxAmount + serviceFeeAmount;
 
     const booking = new hallBookingModel({
       userId,
@@ -131,9 +137,9 @@ export const createHallBooking = async (req, res) => {
       discountAmount,
       taxPercentage,
       taxAmount,
-      serviceFee,
+      serviceFeePercentage,
+      serviceFeeAmount,
       finalAmount,
-      promoCode: promoCode || null,
       specialRequests: specialRequests || ''
     });
 
@@ -166,7 +172,10 @@ export const createHallBooking = async (req, res) => {
           percentage: taxPercentage,
           amount: taxAmount
         },
-        serviceFee,
+        serviceFee: {
+          percentage: serviceFeePercentage,
+          amount: serviceFeeAmount
+        },
         finalAmount
       },
       status: booking.status,
@@ -314,12 +323,5 @@ export const cancelHallBooking = async (req, res) => {
   }
 };
 
-// Helper function to calculate discount
-const calculateDiscount = async (promoCode, basePrice) => {
-  if (!promoCode) return 0; // Default 40% discount as per your design
 
-  // Implement your promo code validation logic here
-  // For now, returning default 40%
-  return 10;
-};
 

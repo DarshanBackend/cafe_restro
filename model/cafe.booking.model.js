@@ -72,9 +72,10 @@ const cafeBookingSchema = new mongoose.Schema(
       discountPercentage: { type: Number, default: 0 },
       couponCode: { type: String, default: null },
       discountAmount: { type: Number, default: 0 },
-      taxPercentage: { type: Number, default: 12 },
+      taxPercentage: { type: Number, default: 18 },
       taxAmount: { type: Number, default: 0 },
-      serviceFee: { type: Number, default: 50 },
+      serviceFeePercentage: { type: Number, default: 5 },
+      serviceFeeAmount: { type: Number, default: 0 },
       totalAmount: { type: Number, default: 0 },
       currency: { type: String, default: "INR" },
     },
@@ -105,16 +106,21 @@ cafeBookingSchema.pre("validate", function (next) {
       (this.pricing.totalGuestRate * this.pricing.discountPercentage) / 100;
   }
 
+  const subtotal = this.pricing.totalGuestRate - (this.pricing.discountAmount || 0);
+
   if (!this.pricing.taxAmount) {
-    const subtotal = this.pricing.totalGuestRate - (this.pricing.discountAmount || 0);
     this.pricing.taxAmount = (subtotal * this.pricing.taxPercentage) / 100;
+  }
+
+  if (!this.pricing.serviceFeeAmount && this.pricing.serviceFeePercentage) {
+    this.pricing.serviceFeeAmount = (subtotal * this.pricing.serviceFeePercentage) / 100;
   }
 
   if (!this.pricing.totalAmount) {
     this.pricing.totalAmount =
-      (this.pricing.totalGuestRate - (this.pricing.discountAmount || 0)) +
+      subtotal +
       this.pricing.taxAmount +
-      this.pricing.serviceFee;
+      (this.pricing.serviceFeeAmount || 0);
   }
 
   next();

@@ -83,36 +83,25 @@ export const previewRestroBooking = async (req, res) => {
 
     let subtotal = baseSubtotal * weekendMultiplier * peakHourMultiplier;
 
-    let couponDiscount = 0;
-    let couponPerc = 0;
+    let couponDiscount = req.body.discountAmount || 0;
+    let couponPerc = req.body.discountPercentage || 0;
     let couponDetails = null;
 
     if (coupanCode) {
-      const validCoupon = await coupanModel.validateCoupon(coupanCode);
-      if (validCoupon) {
-        couponPerc = validCoupon.couponPerc;
-        couponDiscount = (subtotal * couponPerc) / 100;
-        subtotal -= couponDiscount;
-        couponDetails = {
-          code: validCoupon.couponCode,
-          discountApplied: couponPerc + "%",
-          discountAmount: couponDiscount.toFixed(2),
-        };
-      } else {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid or expired coupon code."
-        });
-      }
+      subtotal -= couponDiscount;
+      couponDetails = {
+        code: coupanCode,
+        discountApplied: couponPerc + "%",
+        discountAmount: couponDiscount.toFixed(2),
+      };
     }
 
     const serviceChargePercentage = 5;
-    const taxPercentage = 12;
-    const reservationFee = 50;
+    const taxPercentage = 18;
 
-    const serviceCharge = (subtotal * serviceChargePercentage) / 100;
+    const serviceChargeAmount = (subtotal * serviceChargePercentage) / 100;
     const taxAmount = (subtotal * taxPercentage) / 100;
-    const totalAmount = subtotal + serviceCharge + taxAmount + reservationFee;
+    const totalAmount = subtotal + serviceChargeAmount + taxAmount;
 
     return res.status(200).json({
       success: true,
@@ -162,17 +151,12 @@ export const previewRestroBooking = async (req, res) => {
                 },
             {
               label: "Service Charge (5%)",
-              value: serviceCharge.toFixed(2),
+              value: serviceChargeAmount.toFixed(2),
               prefix: "₹"
             },
             {
-              label: "Tax (12%)",
+              label: "Tax (18%)",
               value: taxAmount.toFixed(2),
-              prefix: "₹"
-            },
-            {
-              label: "Reservation Fee",
-              value: reservationFee.toFixed(2),
               prefix: "₹"
             },
             {
@@ -205,7 +189,7 @@ export const previewRestroBooking = async (req, res) => {
 
 
 
-const calculateAutomaticBilling = async (restaurant, couponCode, numberOfGuests, duration = 60) => {
+const calculateAutomaticBilling = async (restaurant, couponCode, numberOfGuests, duration = 60, reqDiscountPercentage = 0, reqDiscountAmount = 0) => {
   try {
 
     const costPerPerson = restaurant.averageCostForTwo / 2;
@@ -221,14 +205,12 @@ const calculateAutomaticBilling = async (restaurant, couponCode, numberOfGuests,
     const isWeekend = bookingDay === 0 || bookingDay === 6;
     if (isWeekend) baseAmount *= 1.15;
 
-    let discountPercentage = 0;
+    let discountPercentage = reqDiscountPercentage || 0;
     let discountDescription = "";
 
 
     if (couponCode) {
-      const coupon = await coupanModel.findOne({ couponCode: couponCode, isActive: true });
-      if (!coupon) throw new Error("Coupon Code Not Found Or Inactive");
-      discountPercentage = coupon.couponPerc;
+      discountPercentage = reqDiscountPercentage;
       discountDescription = "Coupon Applied";
     }
 
@@ -260,10 +242,11 @@ const calculateAutomaticBilling = async (restaurant, couponCode, numberOfGuests,
 
     const discountAmount = (baseAmount * discountPercentage) / 100;
     const amountAfterDiscount = baseAmount - discountAmount;
-    const taxPercentage = 12;
+    const taxPercentage = 18;
     const taxAmount = (amountAfterDiscount * taxPercentage) / 100;
-    const teamService = 10;
-    const totalAmount = amountAfterDiscount + taxAmount + teamService;
+    const serviceFeePercentage = 5;
+    const serviceFeeAmount = (amountAfterDiscount * serviceFeePercentage) / 100;
+    const totalAmount = amountAfterDiscount + taxAmount + serviceFeeAmount;
 
     return {
       baseAmount: Math.round(baseAmount * 100) / 100,
@@ -275,7 +258,8 @@ const calculateAutomaticBilling = async (restaurant, couponCode, numberOfGuests,
       villaDiscount: 0,
       taxPercentage,
       taxAmount: Math.round(taxAmount * 100) / 100,
-      teamService,
+      serviceFeePercentage,
+      serviceFeeAmount: Math.round(serviceFeeAmount * 100) / 100,
       additionalCharges: [],
       currency: restaurant.currency || "INR",
       totalAmount: Math.round(totalAmount * 100) / 100
@@ -368,7 +352,7 @@ export const createRestaurantBooking = async (req, res) => {
       return sendError(res, "No tables available for your request", null, 409);
     }
 
-    const billing = await calculateAutomaticBilling(restaurant, couponCode, numberOfGuests, timeSlot.duration);
+    const billing = await calculateAutomaticBilling(restaurant, couponCode, numberOfGuests, timeSlot.duration, req.body.discountPercentage, req.body.discountAmount);
 
     const isSelfBooking = guest.isMySelf ?? true;
     const guestData = {

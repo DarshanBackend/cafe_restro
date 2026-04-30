@@ -2,6 +2,48 @@ import coupanModel from "../model/coupan.model.js";
 import { sendNotification } from "../utils/notificatoin.utils.js";
 import { sendBadRequest } from "../utils/responseUtils.js";
 
+export const applyCoupon = async (req, res) => {
+  try {
+    const { couponCode, totalAmount } = req.body;
+
+    if (!couponCode || totalAmount === undefined) {
+      return res.status(400).json({ success: false, message: "couponCode and totalAmount are required" });
+    }
+
+    const coupon = await coupanModel.findOne({ couponCode: couponCode.toUpperCase() });
+
+    if (!coupon) {
+      return res.status(404).json({ success: false, message: "Invalid Coupon Code" });
+    }
+
+    if (!coupon.isActive) {
+      return res.status(400).json({ success: false, message: "Coupon is not active" });
+    }
+
+    if (coupon.couponExpire && new Date(coupon.couponExpire) < new Date()) {
+      return res.status(400).json({ success: false, message: "Coupon has expired" });
+    }
+
+    const discountPercentage = coupon.couponPerc || 0;
+    const discountAmount = (Number(totalAmount) * discountPercentage) / 100;
+    const finalAmount = Number(totalAmount) - discountAmount;
+
+    return res.status(200).json({
+      success: true,
+      message: "Coupon applied successfully",
+      data: {
+        couponCode: coupon.couponCode,
+        discountPercentage,
+        discountAmount,
+        finalAmount
+      }
+    });
+
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export const createCoupan = async (req, res) => {
   try {
     const { coupanCode, coupanPerc, coupanExpire } = req.body;

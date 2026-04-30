@@ -52,10 +52,10 @@ const hotelBookingSchema = new mongoose.Schema(
       totalRoomRate: { type: Number, default: 0 },
       discountPercentage: { type: Number, default: 0 },
       discountAmount: { type: Number, default: 0 },
-      taxPercentage: { type: Number, default: 12 },
+      taxPercentage: { type: Number, default: 18 },
       taxAmount: { type: Number, default: 0 },
-      serviceFee: { type: Number, default: 100 },
-      platformFee: { type: Number, default: 50 },
+      serviceFeePercentage: { type: Number, default: 5 },
+      serviceFeeAmount: { type: Number, default: 0 },
       totalAmount: { type: Number, default: 0 },
       currency: { type: String, default: "INR" },
     },
@@ -102,8 +102,9 @@ hotelBookingSchema.virtual("duration").get(function () {
 //   const subtotal = this.pricing.totalRoomRate - this.pricing.discountAmount;
 
 //   this.pricing.taxAmount = (subtotal * this.pricing.taxPercentage) / 100;
+//   this.pricing.serviceFeeAmount = (subtotal * this.pricing.serviceFeePercentage) / 100;
 //   this.pricing.totalAmount =
-//     subtotal + this.pricing.taxAmount + this.pricing.serviceFee + this.pricing.platformFee;
+//     subtotal + this.pricing.taxAmount + this.pricing.serviceFeeAmount;
 
 //   next();
 // });

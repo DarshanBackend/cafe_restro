@@ -1,4 +1,5 @@
 import userModel from "../model/user.model.js";
+import WalletTransactionModel from "../model/wallet.transaction.model.js";
 import log from "../utils/logger.js"
 import { sendBadRequest, sendError, sendNotFound, sendSuccess } from "../utils/responseUtils.js";
 import jwt from 'jsonwebtoken';
@@ -24,7 +25,7 @@ export const sendOtpEmail = async (email, name, otp) => {
 
 export const newUserRegister = async (req, res) => {
   try {
-    const { name, email, password, deviceName, ipAddress } = req.body;
+    const { name, email, password, deviceName, ipAddress, referralCode } = req.body;
 
     if (!name || !email || !password) {
       return sendBadRequest(res, "name, email, password are required");
@@ -71,11 +72,24 @@ export const newUserRegister = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
     const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
 
+    // Generate a unique referral code
+    const generatedReferralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+    let referredByUserId = null;
+    if (referralCode) {
+      const referrer = await userModel.findOne({ referralCode });
+      if (referrer) {
+        referredByUserId = referrer._id;
+      }
+    }
+
     const newUser = new userModel({
       name,
       email,
       password: hashedPassword,
       avatar,
+      referralCode: generatedReferralCode,
+      referredBy: referredByUserId,
       sessions: [
         {
           deviceName: deviceName || "Unknown Device",
@@ -88,6 +102,39 @@ export const newUserRegister = async (req, res) => {
     });
 
     await newUser.save();
+
+    // Reward logic for referral
+    if (referredByUserId) {
+      const SIGNUP_BONUS = 20;
+      const REFERRER_BONUS = 20;
+
+      // Reward New User
+      newUser.walletBalance = (newUser.walletBalance || 0) + SIGNUP_BONUS;
+      await newUser.save();
+      const newUserTxn = new WalletTransactionModel({
+        userId: newUser._id,
+        amount: SIGNUP_BONUS,
+        type: "credit",
+        description: "Sign-up Bonus via Referral",
+        status: "completed"
+      });
+      await newUserTxn.save();
+
+      // Reward Referrer
+      const referrerUser = await userModel.findById(referredByUserId);
+      if (referrerUser) {
+        referrerUser.walletBalance = (referrerUser.walletBalance || 0) + REFERRER_BONUS;
+        await referrerUser.save();
+        const referrerTxn = new WalletTransactionModel({
+          userId: referrerUser._id,
+          amount: REFERRER_BONUS,
+          type: "credit",
+          description: `Referral Bonus for inviting ${newUser.name}`,
+          status: "completed"
+        });
+        await referrerTxn.save();
+      }
+    }
 
     const payload = {
       _id: newUser._id,
@@ -150,7 +197,7 @@ export const updateUser = async (req, res) => {
     delete updates.email;
     delete updates.otp;
     delete updates.otpExpires;
-    
+
     if (updates.gender) updates.gender = String(updates.gender).toLowerCase();
     if (updates.maritalStatus) updates.maritalStatus = String(updates.maritalStatus).toLowerCase();
 
@@ -165,7 +212,7 @@ export const updateUser = async (req, res) => {
         req.file.mimetype,
         "users"
       );
-      
+
       // Delete old avatar from S3 if it exists and is an S3 url
       if (user.avatar && user.avatar.includes(".amazonaws.com/")) {
         try {
@@ -185,6 +232,110 @@ export const updateUser = async (req, res) => {
     return sendSuccess(res, updatedUser, "User updated successfully");
   } catch (error) {
     return sendError(res, error, `Error updating user: ${error.message}`);
+  }
+};
+
+export const addUserAddress = async (req, res) => {
+  try {
+    const { _id } = req.user;
+    const { type, name, email, contactNo, address, state, country, isDefault } = req.body;
+
+    const user = await userModel.findById(_id);
+    if (!user) return sendNotFound(res, "User not found");
+
+    let setDefault = isDefault;
+    if (user.addresses.length === 0) {
+      setDefault = true;
+    }
+
+    if (setDefault) {
+      user.addresses.forEach(addr => addr.isDefault = false);
+    }
+
+    user.addresses.push({
+      type: type || "myself",
+      name,
+      email,
+      contactNo,
+      address,
+      state,
+      country,
+      isDefault: setDefault
+    });
+
+    await user.save();
+    return sendSuccess(res, user.addresses, "Address added successfully");
+  } catch (error) {
+    return sendError(res, error, `Error adding address: ${error.message}`);
+  }
+};
+
+export const getUserAddresses = async (req, res) => {
+  try {
+    const { _id } = req.user;
+    const user = await userModel.findById(_id);
+    if (!user) return sendNotFound(res, "User not found");
+
+    return sendSuccess(res, "Addresses fetched successfully", user.addresses);
+  } catch (error) {
+    return sendError(res, error, `Error fetching addresses: ${error.message}`);
+  }
+};
+
+export const updateAddress = async (req, res) => {
+  try {
+    const { _id } = req.user;
+    const { addressId } = req.params;
+    const { type, name, email, contactNo, address, state, country, isDefault } = req.body;
+
+    const user = await userModel.findById(_id);
+    if (!user) return sendNotFound(res, "User not found");
+
+    const addressToUpdate = user.addresses.id(addressId);
+    if (!addressToUpdate) return sendNotFound(res, "Address not found");
+
+    if (isDefault) {
+      user.addresses.forEach(addr => addr.isDefault = false);
+    }
+
+    if (type !== undefined) addressToUpdate.type = type;
+    if (name !== undefined) addressToUpdate.name = name;
+    if (email !== undefined) addressToUpdate.email = email;
+    if (contactNo !== undefined) addressToUpdate.contactNo = contactNo;
+    if (address !== undefined) addressToUpdate.address = address;
+    if (state !== undefined) addressToUpdate.state = state;
+    if (country !== undefined) addressToUpdate.country = country;
+    if (isDefault !== undefined) addressToUpdate.isDefault = isDefault;
+
+    await user.save();
+    return sendSuccess(res, user.addresses, "Address updated successfully");
+  } catch (error) {
+    return sendError(res, error, `Error updating address: ${error.message}`);
+  }
+};
+
+export const deleteAddress = async (req, res) => {
+  try {
+    const { _id } = req.user;
+    const { addressId } = req.params;
+
+    const user = await userModel.findById(_id);
+    if (!user) return sendNotFound(res, "User not found");
+
+    const addressIndex = user.addresses.findIndex(addr => addr._id.toString() === addressId);
+    if (addressIndex === -1) return sendNotFound(res, "Address not found");
+
+    const wasDefault = user.addresses[addressIndex].isDefault;
+    user.addresses.splice(addressIndex, 1);
+
+    if (wasDefault && user.addresses.length > 0) {
+      user.addresses[0].isDefault = true;
+    }
+
+    await user.save();
+    return sendSuccess(res, "Address deleted successfully", user.addresses);
+  } catch (error) {
+    return sendError(res, error, `Error deleting address: ${error.message}`);
   }
 };
 
@@ -242,12 +393,15 @@ export const googleLogin = async (req, res) => {
       await user.save();
       log.success(`${user.name} login successful`);
     } else {
+      const generatedReferralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
       user = new userModel({
         name,
         email,
         uid: uid || null,
         avatar: avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
         password: "SOCIAL_LOGIN",
+        referralCode: generatedReferralCode,
         sessions: [
           {
             deviceName: deviceName || "Unknown Device",

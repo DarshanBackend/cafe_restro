@@ -48,7 +48,22 @@ const bookingSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
+  taxPercentage: {
+    type: Number,
+    default: 18,
+    min: 0
+  },
   taxAmount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  serviceFeePercentage: {
+    type: Number,
+    default: 5,
+    min: 0
+  },
+  serviceFeeAmount: {
     type: Number,
     default: 0,
     min: 0
@@ -62,10 +77,6 @@ const bookingSchema = new mongoose.Schema({
     type: String,
     enum: ['pending', 'confirmed', 'cancelled', 'completed'],
     default: 'pending'
-  },
-  promoCode: {
-    type: String,
-    trim: true
   },
   specialRequests: {
     type: String,

@@ -75,23 +75,21 @@ export const createCafeBooking = async (req, res) => {
     const guestRate = perGuestRate || cafe.pricing?.averagePrice || 200;
     const totalGuestRate = guestRate * numberOfGuests;
 
-    let discountPercentage = 0;
-    let discountAmount = 0;
-    const taxPercentage = 12;
-    const serviceFee = 50;
+    let discountPercentage = req.body.discountPercentage || 0;
+    let discountAmount = req.body.discountAmount || 0;
+    const taxPercentage = 18;
+    const serviceFeePercentage = 5;
 
-    // Coupon validation
-    if (couponCode) {
-      const coupan = await coupanModel.findOne({ couponCode: couponCode, isActive: true });
-      if (!coupan) return sendNotFound(res, "Invalid or inactive coupon code!");
-      discountPercentage = coupan.couponPerc || 0;
-    }
+    // Validate bounds
+    if (discountPercentage > 100) discountPercentage = 100;
+    if (discountAmount > totalGuestRate) discountAmount = totalGuestRate;
 
     // Calculate all values precisely
     discountAmount = (totalGuestRate * discountPercentage) / 100;
     const subtotal = totalGuestRate - discountAmount;
     const taxAmount = (subtotal * taxPercentage) / 100;
-    const totalAmount = subtotal + taxAmount + serviceFee;
+    const serviceFeeAmount = (subtotal * serviceFeePercentage) / 100;
+    const totalAmount = subtotal + taxAmount + serviceFeeAmount;
 
     // Optional rounding for cleaner values
     const round = (num) => Math.round(num * 100) / 100;
@@ -104,7 +102,8 @@ export const createCafeBooking = async (req, res) => {
       discountAmount: round(discountAmount),
       taxPercentage: round(taxPercentage),
       taxAmount: round(taxAmount),
-      serviceFee: round(serviceFee),
+      serviceFeePercentage: round(serviceFeePercentage),
+      serviceFeeAmount: round(serviceFeeAmount),
       totalAmount: round(totalAmount),
       currency: currency || cafe.pricing?.currency || "INR",
     };
@@ -369,44 +368,27 @@ export const previewCafeBooking = async (req, res) => {
 
     // 🎟️ Coupon Logic
     let couponDetails = null;
-    let couponDiscountAmount = 0;
+    let couponDiscountAmount = req.body.discountAmount || 0;
+    let couponPercentage = req.body.discountPercentage || 0;
 
     if (couponCode) {
-      const coupon = await coupanModel.findOne({ couponCode, isActive: true });
-      if (coupon) {
-        if (coupon.type === "PERCENT") {
-          couponDiscountAmount = (discountedSubtotal * coupon.couponPerc) / 100;
-        } else if (coupon.type === "FLAT") {
-          couponDiscountAmount = coupon.flatAmount || 0;
-        }
-
-        discountedSubtotal -= couponDiscountAmount;
-        if (discountedSubtotal < 0) discountedSubtotal = 0;
-
-        couponDetails = {
-          code: coupon.couponCode,
-          type: coupon.type,
-          description: coupon.description || "",
-          discountPercent: coupon.couponPerc || null,
-          flatAmount: coupon.flatAmount || null,
-          discountApplied: couponDiscountAmount.toFixed(2)
-        };
-      } else {
-        couponDetails = {
-          code: couponCode,
-          message: "Invalid or inactive coupon"
-        };
-      }
+      couponDetails = {
+        code: couponCode,
+        discountPercent: couponPercentage,
+        discountApplied: couponDiscountAmount,
+        description: "Coupon Applied"
+      };
+      discountedSubtotal -= couponDiscountAmount;
+      if (discountedSubtotal < 0) discountedSubtotal = 0;
     }
 
     // 💰 Charges & Total Calculation
     const serviceChargePercentage = 5;
-    const taxPercentage = 12;
-    const reservationFee = 50;
+    const taxPercentage = 18;
 
-    const serviceCharge = (discountedSubtotal * serviceChargePercentage) / 100;
+    const serviceChargeAmount = (discountedSubtotal * serviceChargePercentage) / 100;
     const taxAmount = (discountedSubtotal * taxPercentage) / 100;
-    const totalAmount = discountedSubtotal + serviceCharge + taxAmount + reservationFee;
+    const totalAmount = discountedSubtotal + serviceChargeAmount + taxAmount;
 
     // ✅ Response
     return res.status(200).json({
@@ -463,17 +445,12 @@ export const previewCafeBooking = async (req, res) => {
               : []),
             {
               label: "Service Charge (5%)",
-              value: serviceCharge.toFixed(2),
+              value: serviceChargeAmount.toFixed(2),
               prefix: "₹"
             },
             {
-              label: "Tax (12%)",
+              label: "Tax (18%)",
               value: taxAmount.toFixed(2),
-              prefix: "₹"
-            },
-            {
-              label: "Reservation Fee",
-              value: reservationFee.toFixed(2),
               prefix: "₹"
             },
             {

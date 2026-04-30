@@ -63,11 +63,23 @@ const UserSchema = new mongoose.Schema({
     default: null,
     lowercase: true,
   },
+  anniversaryDate: {
+    type: String,
+    default: null
+  },
   city: {
     type: String,
     default: null
   },
   state: {
+    type: String,
+    default: null
+  },
+  address: {
+    type: String,
+    default: null
+  },
+  country: {
     type: String,
     default: null
   },
@@ -79,6 +91,18 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  addresses: [
+    {
+      type: { type: String, enum: ["myself", "guest"], default: "myself" },
+      name: { type: String, default: null },
+      email: { type: String, default: null },
+      contactNo: { type: String, default: null },
+      address: { type: String, default: null },
+      state: { type: String, default: null },
+      country: { type: String, default: null },
+      isDefault: { type: Boolean, default: false }
+    }
+  ],
   role: {
     type: String,
     enum: ["user", "superadmin"],
@@ -90,6 +114,20 @@ const UserSchema = new mongoose.Schema({
   },
   otpExpires: {
     type: Date,
+    default: null
+  },
+  walletBalance: {
+    type: Number,
+    default: 0
+  },
+  referralCode: {
+    type: String,
+    unique: true,
+    sparse: true
+  },
+  referredBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
     default: null
   }
 });

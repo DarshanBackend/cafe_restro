@@ -5,9 +5,12 @@ import { sendBadRequest, sendError, sendNotFound, sendSuccess } from "../utils/r
 import coupanModel from "../model/coupan.model.js";
 import { sendNotification } from "../utils/notificatoin.utils.js";
 import userModel from "../model/user.model.js";
+import Stripe from "stripe";
+import WalletTransactionModel from "../model/wallet.transaction.model.js";
 
 export const createBooking = async (req, res) => {
   try {
+    const stripe = new Stripe(process.env.STRIPE_SECRET);
     const userId = req.user?._id;
     const { hotelId } = req.params;
 
@@ -29,7 +32,8 @@ export const createBooking = async (req, res) => {
       numberOfRooms = 1,
       specialRequests = "",
       transactionId = "",
-      paymentStatus = "pending"
+      paymentStatus = "pending",
+      paymentMethod = "Stripe" // Can be 'Stripe' or 'Wallet'
     } = req.body;
 
     const hotel = await hotelModel.findById(hotelId);
@@ -54,24 +58,20 @@ export const createBooking = async (req, res) => {
     const roomRatePerNight = room.pricePerNight;
     const totalRoomRate = roomRatePerNight * numberOfNights * numberOfRooms;
 
-    let discountPercentage = 0;
-    let discountAmount = 0;
+    let discountPercentage = req.body.discountPercentage || 0;
+    let discountAmount = req.body.discountAmount || 0;
 
-    if (coupanCode) {
-      const coupon = await coupanModel.findOne({ couponCode: coupanCode });
-      if (!coupon) return sendNotFound(res, "Coupon Code Not Found!");
-      if (!coupon.isActive) return sendNotFound(res, "Coupon Code Not Active!");
-
-      discountPercentage = coupon.couponPerc || 0;
-      discountAmount = (totalRoomRate * discountPercentage) / 100;
-    }
+    // Validate that discount amount is reasonable if provided directly
+    if (discountPercentage > 100) discountPercentage = 100;
+    if (discountAmount > totalRoomRate) discountAmount = totalRoomRate;
 
     const subtotal = totalRoomRate - discountAmount;
-    const taxPercentage = 12;
+    const taxPercentage = 18;
+    const serviceFeePercentage = 5;
+    
     const taxAmount = (subtotal * taxPercentage) / 100;
-    const serviceFee = 100;
-    const platformFee = 50;
-    const totalAmount = subtotal + taxAmount + serviceFee + platformFee;
+    const serviceFeeAmount = (subtotal * serviceFeePercentage) / 100;
+    const totalAmount = subtotal + taxAmount + serviceFeeAmount;
     let user = {};
 
     if (isMySelf) {
@@ -120,8 +120,8 @@ export const createBooking = async (req, res) => {
         discountAmount,
         taxPercentage,
         taxAmount,
-        serviceFee,
-        platformFee,
+        serviceFeePercentage,
+        serviceFeeAmount,
         totalAmount,
         currency: "INR",
       },
@@ -135,7 +135,6 @@ export const createBooking = async (req, res) => {
 
     const savedBooking = await booking.save();
 
-
     await sendNotification({
       adminId: hotel.adminId,
       title: `New Booking Created`,
@@ -145,10 +144,79 @@ export const createBooking = async (req, res) => {
       userId,
     }).catch((err) => console.error("Notification Error:", err.message));
 
+    if (paymentMethod === "Wallet") {
+      const dbUser = await userModel.findById(userId);
+      if (!dbUser) return res.status(404).json({ success: false, message: "User not found" });
+
+      if ((dbUser.walletBalance || 0) < totalAmount) {
+        return res.status(400).json({ success: false, message: "Insufficient wallet balance" });
+      }
+
+      // Deduct from wallet
+      dbUser.walletBalance -= totalAmount;
+      await dbUser.save();
+
+      // Create Wallet Transaction
+      const wTxn = new WalletTransactionModel({
+        userId,
+        amount: totalAmount,
+        type: "debit",
+        description: `Hotel Booking - ${hotel.name}`,
+        status: "completed"
+      });
+      await wTxn.save();
+
+      // Update booking
+      savedBooking.payment.paymentMethod = "Wallet";
+      savedBooking.payment.paymentStatus = "completed";
+      savedBooking.payment.transactionId = wTxn._id.toString();
+      await savedBooking.save();
+
+      return res.status(201).json({
+        success: true,
+        message: "Booking confirmed successfully via Wallet",
+        result: savedBooking,
+      });
+    }
+
+    // Create Stripe Checkout Session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price_data: {
+            currency: "inr",
+            product_data: {
+              name: `Hotel Booking - ${hotel.name}`,
+              description: `Room: ${room.type} | ${numberOfNights} Nights`,
+              images: hotel.images && hotel.images.length > 0 ? [hotel.images[0]] : [],
+            },
+            unit_amount: Math.round(totalAmount * 100), // Stripe expects amount in paise (cents)
+          },
+          quantity: 1,
+        },
+      ],
+      mode: "payment",
+      success_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/booking/success?session_id={CHECKOUT_SESSION_ID}&booking_id=${savedBooking._id}`,
+      cancel_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/booking/cancel?booking_id=${savedBooking._id}`,
+      metadata: {
+        bookingId: savedBooking._id.toString(),
+        hotelId: hotelId.toString(),
+        userId: userId ? userId.toString() : "guest",
+      },
+    });
+
+    // Update booking with the Stripe session ID
+    savedBooking.payment.transactionId = session.id;
+    savedBooking.payment.paymentMethod = "Stripe";
+    await savedBooking.save();
+
     return res.status(201).json({
       success: true,
-      message: "Booking created successfully",
+      message: "Booking initialized successfully",
       result: savedBooking,
+      sessionId: session.id,
+      url: session.url
     });
   } catch (err) {
     console.error("createBooking Error:", err);
@@ -198,38 +266,28 @@ export const previewHotelBooking = async (req, res) => {
     const numberOfNights = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
 
     const TAX_PERCENT = 18;
-    const SERVICE_FEE = 5;
+    const SERVICE_FEE_PERCENT = 5;
 
     const roomRatePerNight = room.pricePerNight;
     const totalRoomRate = roomRatePerNight * numberOfNights * numberOfRooms;
 
-    let discountPercent = 0;
-    let discountAmount = 0;
+    let discountPercent = req.body.discountPercentage || 0;
+    let discountAmount = req.body.discountAmount || 0;
     let couponDetails = null;
 
     if (couponCode) {
-      const coupon = await coupanModel.findOne({
-        couponCode,
-        isActive: true,
-      });
-
-      if (coupon) {
-        discountPercent = coupon.couponPerc || 0;
-        discountAmount = (totalRoomRate * discountPercent) / 100;
-        couponDetails = {
-          code: coupon.couponCode,
-          discountPercent,
-          description: coupon.description || "",
-        };
-      } else {
-        couponDetails = { code: couponCode, message: "Invalid or inactive coupon" };
-      }
+      // Assuming frontend pre-calculated, just show the values
+      couponDetails = {
+        code: couponCode,
+        discountPercent,
+        description: "Coupon Applied",
+      };
     }
 
     let subtotal = totalRoomRate - discountAmount;
     const taxAmount = (subtotal * TAX_PERCENT) / 100;
-    const serviceFee = (subtotal * SERVICE_FEE) / 100;
-    const totalAmount = subtotal + taxAmount + serviceFee;
+    const serviceFeeAmount = (subtotal * SERVICE_FEE_PERCENT) / 100;
+    const totalAmount = subtotal + taxAmount + serviceFeeAmount;
 
     return res.status(200).json({
       success: true,
@@ -261,7 +319,8 @@ export const previewHotelBooking = async (req, res) => {
           subtotal,
           taxPercent: TAX_PERCENT,
           taxAmount,
-          serviceFee: SERVICE_FEE,
+          serviceFeePercent: SERVICE_FEE_PERCENT,
+          serviceFeeAmount: serviceFeeAmount,
           totalAmount: Number(totalAmount.toFixed(2)),
           currency: "INR",
         },

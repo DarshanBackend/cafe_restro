@@ -1,7 +1,8 @@
 import express from 'express';
-import { ForgotOtpSend, ResetPassword, VerifyOtp, changeUserPassword, deleteUser, getAllUsers, getUserById, getUserProfile, googleLogin, newUserRegister, updateUser, userLogin, userLogout } from '../controller/user.controller.js';
+import { ForgotOtpSend, ResetPassword, VerifyOtp, changeUserPassword, deleteUser, getAllUsers, getUserById, getUserProfile, googleLogin, newUserRegister, updateUser, addUserAddress, getUserAddresses, updateAddress, deleteAddress, userLogin, userLogout } from '../controller/user.controller.js';
 import { UserAuth } from '../middleware/UserAuth.js';
 import { adminLogin, adminUpdate, deleteAdmin, getAdminById, getAllAdmins, newAdminRegister } from '../controller/admin.controller.js';
+import { getWalletDetails, addMoneyToWallet, verifyWalletPayment } from '../controller/wallet.controller.js';
 import { AdminAuth } from '../middleware/AdminAuth.js';
 import { createNewHotel, deleteHotels, getAllHotels, getCitySuggestions, getHotelByCityName, getHotelById, mainSearchHotels, searchHotels } from '../controller/hotel.controller.js';
 import { handleMulterErrors, processAndUploadImages, uploadFiles } from '../middleware/multer.middleware.js';
@@ -22,7 +23,7 @@ import { createHall, deleteGalleryImage, deleteHall, getAllHalls, getHallById, g
 import { cancelHallBooking, createHallBooking, getHallBookingById, getUserHallBookings } from '../controller/hall.booking.controller.js';
 import { addNewEvent, bulkDeleteEvents, deleteEvent, getAllEvents, getEventById, getEventStats, updateEvent } from '../controller/event.controller.js';
 import { createTour, deleteTour, getAllTours, getBestOfferTours, getTourById, updateTour, updateTourImage, uploadTourImage } from '../controller/tour.controller.js';
-import { createCoupan, deleteCoupan, getAllCoupans, getCoupanById, toggleCoupanStatus, updateCoupan } from '../controller/coupan.controller.js';
+import { createCoupan, deleteCoupan, getAllCoupans, getCoupanById, toggleCoupanStatus, updateCoupan, applyCoupon } from '../controller/coupan.controller.js';
 import { createOffer, deleteOffer, getAllOffers, getOfferById, toggleOfferStatus, updateOffer } from '../controller/offer.controller.js';
 import { getMyAllBookings, getMyRefundBooking } from '../controller/payments.controller.js';
 import { downloadBookingInvoice } from '../controller/invoice.controller.js';
@@ -45,12 +46,21 @@ indexRouter.post("/resetPassword", ResetPassword);
 indexRouter.get("/getAllUsers", getAllUsers);
 indexRouter.get("/getUserById/:id", getUserById);
 indexRouter.put("/updateUser/:id", upload.single("avatar"), updateUser);
+indexRouter.post("/addAddress", UserAuth, addUserAddress);
+indexRouter.get("/getAddresses", UserAuth, getUserAddresses);
+indexRouter.put("/updateAddress/:addressId", UserAuth, updateAddress);
+indexRouter.delete("/deleteAddress/:addressId", UserAuth, deleteAddress);
 indexRouter.delete("/deleteUser/:id", deleteUser);
 
 indexRouter.post("/changeUserPassword", UserAuth, changeUserPassword)
 indexRouter.post("/logout", UserAuth, userLogout)
 //profile section
 indexRouter.get("/userProfile", UserAuth, getUserProfile)
+
+//wallet section
+indexRouter.get("/wallet", UserAuth, getWalletDetails);
+indexRouter.post("/wallet/addMoney", UserAuth, addMoneyToWallet);
+indexRouter.post("/wallet/verifyPayment", UserAuth, verifyWalletPayment);
 
 //admin routes section
 indexRouter.post("/newAdminRegister", newAdminRegister);
@@ -247,6 +257,7 @@ indexRouter.get("/getCoupanById/:id", getCoupanById);
 indexRouter.put("/updateCoupan/:id", AdminAuth, updateCoupan);
 indexRouter.delete("/deleteCoupan/:id", AdminAuth, deleteCoupan);
 indexRouter.patch("/toggleCoupanStatus/:id", AdminAuth, toggleCoupanStatus);
+indexRouter.post("/applyCoupon", UserAuth, applyCoupon);
 
 //offer section
 indexRouter.post("/createOffer", AdminAuth, upload.single("backgroundImage"), createOffer);

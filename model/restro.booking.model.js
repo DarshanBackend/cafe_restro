@@ -108,9 +108,10 @@ const restaurantBookingSchema = new mongoose.Schema(
         description: { type: String, default: "" },
       },
       villaDiscount: { type: Number, default: 0 },
-      taxPercentage: { type: Number, default: 12 },
+      taxPercentage: { type: Number, default: 18 },
       taxAmount: { type: Number, default: 0 },
-      teamService: { type: Number, default: 10 },
+      serviceFeePercentage: { type: Number, default: 5 },
+      serviceFeeAmount: { type: Number, default: 0 },
       additionalCharges: [
         {
           description: String,
@@ -196,13 +197,13 @@ restaurantBookingSchema.virtual("finalAmount").get(function () {
     0
   );
 
-  return amountAfterDiscount + this.billing.taxAmount + this.billing.teamService + additionalCharges;
+  return amountAfterDiscount + this.billing.taxAmount + (this.billing.serviceFeeAmount || 0) + additionalCharges;
 });
 
 // Pre-save middleware for calculations
 restaurantBookingSchema.pre("save", function (next) {
-  // Calculate tax amount
   this.billing.taxAmount = (this.amountAfterDiscount * this.billing.taxPercentage) / 100;
+  this.billing.serviceFeeAmount = (this.amountAfterDiscount * (this.billing.serviceFeePercentage || 5)) / 100;
 
   // Calculate total amount
   this.billing.totalAmount = this.finalAmount;
@@ -267,7 +268,8 @@ restaurantBookingSchema.methods.calculateBill = function () {
     discountAmount: this.totalDiscountAmount,
     amountAfterDiscount: this.amountAfterDiscount,
     taxAmount: this.billing.taxAmount,
-    teamService: this.billing.teamService,
+    serviceFeePercentage: this.billing.serviceFeePercentage,
+    serviceFeeAmount: this.billing.serviceFeeAmount,
     additionalCharges: this.billing.additionalCharges.reduce((sum, charge) => sum + charge.amount, 0),
     totalAmount: this.finalAmount,
   };
