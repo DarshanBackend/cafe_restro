@@ -13,7 +13,8 @@ export const createHall = async (req, res) => {
     const {
       name,
       description,
-      price,
+      actualPrice,
+      discountPrice,
       location,
       address,
       type,
@@ -32,7 +33,8 @@ export const createHall = async (req, res) => {
 
     // Validation
     if (!name?.trim()) return sendBadRequest(res, "Hall name is required");
-    if (!price || price <= 0) return sendBadRequest(res, "Valid price is required");
+    if (!actualPrice || actualPrice <= 0) return sendBadRequest(res, "Valid actual price is required");
+    if (!discountPrice || discountPrice <= 0) return sendBadRequest(res, "Valid discount price is required");
 
     // Check for duplicate hall BEFORE uploading images
     const existingHall = await hallModel.findOne({ name: name.trim() });
@@ -68,7 +70,8 @@ export const createHall = async (req, res) => {
       adminId: adminId,
       name: name.trim(),
       description: description?.trim() || "",
-      price: Number(price),
+      actualPrice: Number(actualPrice),
+      discountPrice: Number(discountPrice),
       location: location?.trim() || "",
       address: address?.trim() || "",
       type: type?.trim() || "Banquet Hall",
@@ -126,9 +129,9 @@ export const getAllHalls = async (req, res) => {
     if (category) filter.category = category;
 
     if (minPrice || maxPrice) {
-      filter.price = {};
-      if (minPrice) filter.price.$gte = Number(minPrice);
-      if (maxPrice) filter.price.$lte = Number(maxPrice);
+      filter.discountPrice = {};
+      if (minPrice) filter.discountPrice.$gte = Number(minPrice);
+      if (maxPrice) filter.discountPrice.$lte = Number(maxPrice);
     }
 
     if (search) {
@@ -213,7 +216,7 @@ export const getPopularHalls = async (req, res) => {
         isAvailable: true,
         rating: { $gte: 4 } // Only halls with rating 4+ 
       })
-      .select('name price location type category capacity amenities images rating reviewCount')
+      .select('name actualPrice discountPrice location type category capacity amenities images rating reviewCount')
       .sort({
         rating: -1,
         reviewCount: -1,
@@ -226,7 +229,7 @@ export const getPopularHalls = async (req, res) => {
     if (popularHalls.length === 0) {
       const recentHalls = await hallModel
         .find({ isAvailable: true })
-        .select('name price location type category capacity amenities images rating reviewCount')
+        .select('name actualPrice discountPrice location type category capacity amenities images rating reviewCount')
         .sort({ createdAt: -1 })
         .limit(parseInt(limit))
         .populate('adminId', 'name email');
@@ -261,7 +264,8 @@ export const updateHall = async (req, res) => {
     const {
       name,
       description,
-      price,
+      actualPrice,
+      discountPrice,
       location,
       address,
       type,
@@ -340,7 +344,8 @@ export const updateHall = async (req, res) => {
     // Update fields
     if (name !== undefined) hall.name = name.trim();
     if (description !== undefined) hall.description = description.trim();
-    if (price !== undefined) hall.price = Number(price);
+    if (actualPrice !== undefined) hall.actualPrice = Number(actualPrice);
+    if (discountPrice !== undefined) hall.discountPrice = Number(discountPrice);
     if (location !== undefined) hall.location = location.trim();
     if (address !== undefined) hall.address = address.trim();
     if (type !== undefined) hall.type = type;
@@ -510,43 +515,45 @@ export const getPreviewBillingOfHall = async (req, res) => {
       return sendNotFound(res, "Hall Not Found");
     }
 
-    let perDayHallPrice = hall.price;
-    let subTotal = perDayHallPrice * numberOfDays;
-    let taxPercentage = 12;
-    let serviceFee = 100;
+    const basePricePerDay = hall.discountPrice; 
+    const subTotal = basePricePerDay * numberOfDays;
 
-    // Calculate tax amount
-    let taxAmount = (subTotal * taxPercentage) / 100;
+    const actualPriceTotal = subTotal;
+    const discountPercentage = 10;
+    const discountAmount = (actualPriceTotal * discountPercentage) / 100;
+    const discountPriceTotal = actualPriceTotal - discountAmount;
 
-    // Calculate total amount
-    let totalAmount = subTotal + taxAmount + serviceFee;
+    const taxesAndFeesPercentage = 23;
+    const taxesAndFeesAmount = (discountPriceTotal * taxesAndFeesPercentage) / 100;
+    const totalAmount = discountPriceTotal + taxesAndFeesAmount;
 
     const formattedResponse = {
       hallDetails: {
         hallId: hall._id,
         hallName: hall.name,
-        pricePerDay: perDayHallPrice
+        actualPrice: hall.actualPrice,
+        offeredPrice: hall.discountPrice
       },
       billingSummary: {
         numberOfDays: numberOfDays,
         subTotal: subTotal,
-        tax: {
-          percentage: taxPercentage,
-          amount: taxAmount
+        mandatoryDiscount: {
+          percentage: discountPercentage,
+          amount: discountAmount
         },
-        serviceFee: serviceFee,
-        totalAmount: totalAmount
+        discountPrice: discountPriceTotal,
+        taxesAndFees: {
+          percentage: taxesAndFeesPercentage,
+          amount: taxesAndFeesAmount
+        },
+        totalAmount: Number(totalAmount.toFixed(2))
       },
       breakdown: {
         basePrice: subTotal,
         additionalCharges: [
           {
-            name: "Service Fee",
-            amount: serviceFee
-          },
-          {
-            name: `Tax (${taxPercentage}%)`,
-            amount: taxAmount
+            name: `Tax (${taxesAndFeesPercentage}%)`,
+            amount: taxesAndFeesAmount
           }
         ]
       }

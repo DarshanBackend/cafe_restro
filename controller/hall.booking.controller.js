@@ -106,23 +106,17 @@ export const createHallBooking = async (req, res) => {
       });
     }
 
-    const basePrice = hall.price * totalDays;
+    const basePrice = (hall.discountPrice || 0) * totalDays;
 
-    let discountPercentage = req.body.discountPercentage || 0;
-    let discountAmount = req.body.discountAmount || 0;
+    const actualPrice = basePrice;
+    const discountPercentage = 10;
+    const discountAmount = (actualPrice * discountPercentage) / 100;
+    const discountPrice = actualPrice - discountAmount;
 
-    if (discountPercentage > 100) discountPercentage = 100;
-    if (discountAmount > basePrice) discountAmount = basePrice;
+    const taxesAndFeesPercentage = 23;
+    const taxesAndFeesAmount = (discountPrice * taxesAndFeesPercentage) / 100;
 
-    const subtotal = basePrice - discountAmount;
-
-    const taxPercentage = 18;
-    const taxAmount = (subtotal * taxPercentage) / 100;
-
-    const serviceFeePercentage = 5;
-    const serviceFeeAmount = (subtotal * serviceFeePercentage) / 100;
-
-    const finalAmount = subtotal + taxAmount + serviceFeeAmount;
+    const finalAmount = discountPrice + taxesAndFeesAmount;
 
     const booking = new hallBookingModel({
       userId,
@@ -133,12 +127,12 @@ export const createHallBooking = async (req, res) => {
       endTime,
       totalDays,
       basePrice,
+      actualPrice,
       discountPercentage,
       discountAmount,
-      taxPercentage,
-      taxAmount,
-      serviceFeePercentage,
-      serviceFeeAmount,
+      discountPrice,
+      taxesAndFeesPercentage,
+      taxesAndFeesAmount,
       finalAmount,
       specialRequests: specialRequests || ''
     });
@@ -163,18 +157,15 @@ export const createHallBooking = async (req, res) => {
         totalDays
       },
       billingSummary: {
-        basePrice,
+        actualPrice,
         discount: {
           percentage: discountPercentage,
           amount: discountAmount
         },
-        tax: {
-          percentage: taxPercentage,
-          amount: taxAmount
-        },
-        serviceFee: {
-          percentage: serviceFeePercentage,
-          amount: serviceFeeAmount
+        discountPrice,
+        taxesAndFees: {
+          percentage: taxesAndFeesPercentage,
+          amount: taxesAndFeesAmount
         },
         finalAmount
       },

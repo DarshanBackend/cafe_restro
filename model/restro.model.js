@@ -158,9 +158,14 @@ const restaurantSchema = new mongoose.Schema(
         maxlength: 50
       },
     ],
-    averageCostForTwo: {
+    actualPrice: {
       type: Number,
-      required: [true, "Average cost for two is required"],
+      required: [true, "Actual price is required"],
+      min: [0, "Cost cannot be negative"],
+    },
+    discountPrice: {
+      type: Number,
+      required: [true, "Discount price is required"],
       min: [0, "Cost cannot be negative"],
     },
     currency: {

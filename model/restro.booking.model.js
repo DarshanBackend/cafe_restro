@@ -99,19 +99,18 @@ const restaurantBookingSchema = new mongoose.Schema(
     //   helpSupport: { type: Boolean, String: null },
     // },
 
-    // Billing Information from Figma design
     billing: {
       baseAmount: { type: Number, required: true, min: 0 },
+      actualPrice: { type: Number, default: 0 },
+      discountPrice: { type: Number, default: 0 },
       discount: {
-        percentage: { type: Number, default: 0, min: 0, max: 100 },
+        percentage: { type: Number, default: 10, min: 0, max: 100 },
         amount: { type: Number, default: 0, min: 0 },
-        description: { type: String, default: "" },
+        description: { type: String, default: "10% Flat Discount" },
       },
       villaDiscount: { type: Number, default: 0 },
-      taxPercentage: { type: Number, default: 18 },
-      taxAmount: { type: Number, default: 0 },
-      serviceFeePercentage: { type: Number, default: 5 },
-      serviceFeeAmount: { type: Number, default: 0 },
+      taxesAndFeesPercentage: { type: Number, default: 23 },
+      taxesAndFeesAmount: { type: Number, default: 0 },
       additionalCharges: [
         {
           description: String,
@@ -197,13 +196,15 @@ restaurantBookingSchema.virtual("finalAmount").get(function () {
     0
   );
 
-  return amountAfterDiscount + this.billing.taxAmount + (this.billing.serviceFeeAmount || 0) + additionalCharges;
+  return amountAfterDiscount + (this.billing.taxesAndFeesAmount || 0) + additionalCharges;
 });
 
 // Pre-save middleware for calculations
 restaurantBookingSchema.pre("save", function (next) {
-  this.billing.taxAmount = (this.amountAfterDiscount * this.billing.taxPercentage) / 100;
-  this.billing.serviceFeeAmount = (this.amountAfterDiscount * (this.billing.serviceFeePercentage || 5)) / 100;
+  this.billing.actualPrice = this.billing.baseAmount;
+  this.billing.discountPrice = this.amountAfterDiscount;
+
+  this.billing.taxesAndFeesAmount = (this.amountAfterDiscount * (this.billing.taxesAndFeesPercentage || 23)) / 100;
 
   // Calculate total amount
   this.billing.totalAmount = this.finalAmount;
@@ -265,11 +266,11 @@ restaurantBookingSchema.statics.findByUser = function (userId, status = null) {
 restaurantBookingSchema.methods.calculateBill = function () {
   const calculations = {
     baseAmount: this.billing.baseAmount,
+    actualPrice: this.billing.actualPrice,
     discountAmount: this.totalDiscountAmount,
-    amountAfterDiscount: this.amountAfterDiscount,
-    taxAmount: this.billing.taxAmount,
-    serviceFeePercentage: this.billing.serviceFeePercentage,
-    serviceFeeAmount: this.billing.serviceFeeAmount,
+    discountPrice: this.billing.discountPrice,
+    taxesAndFeesPercentage: this.billing.taxesAndFeesPercentage,
+    taxesAndFeesAmount: this.billing.taxesAndFeesAmount,
     additionalCharges: this.billing.additionalCharges.reduce((sum, charge) => sum + charge.amount, 0),
     totalAmount: this.finalAmount,
   };

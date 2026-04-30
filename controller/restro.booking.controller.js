@@ -71,7 +71,7 @@ export const previewRestroBooking = async (req, res) => {
       });
     }
 
-    const baseRate = restaurant.averageCostForTwo / 2; // avg per person
+    const baseRate = restaurant.discountPrice / 2; // Using offered discount price as base
     const baseSubtotal = baseRate * numberOfGuests * tableCount;
     const currency = restaurant.currency || "INR";
 
@@ -83,25 +83,24 @@ export const previewRestroBooking = async (req, res) => {
 
     let subtotal = baseSubtotal * weekendMultiplier * peakHourMultiplier;
 
-    let couponDiscount = req.body.discountAmount || 0;
-    let couponPerc = req.body.discountPercentage || 0;
+    const actualPrice = subtotal;
+    const discountPercentage = 10;
+    const discountAmount = (actualPrice * discountPercentage) / 100;
+    const discountPrice = actualPrice - discountAmount;
+
     let couponDetails = null;
 
     if (coupanCode) {
-      subtotal -= couponDiscount;
       couponDetails = {
         code: coupanCode,
-        discountApplied: couponPerc + "%",
-        discountAmount: couponDiscount.toFixed(2),
+        discountApplied: discountPercentage + "%",
+        discountAmount: discountAmount.toFixed(2),
       };
     }
 
-    const serviceChargePercentage = 5;
-    const taxPercentage = 18;
-
-    const serviceChargeAmount = (subtotal * serviceChargePercentage) / 100;
-    const taxAmount = (subtotal * taxPercentage) / 100;
-    const totalAmount = subtotal + serviceChargeAmount + taxAmount;
+    const taxesAndFeesPercentage = 23;
+    const taxesAndFeesAmount = (discountPrice * taxesAndFeesPercentage) / 100;
+    const totalAmount = discountPrice + taxesAndFeesAmount;
 
     return res.status(200).json({
       success: true,
@@ -145,18 +144,18 @@ export const previewRestroBooking = async (req, res) => {
                   prefix: "₹"
                 }
               : {
-                  label: "Coupon Discount",
-                  value: "0%",
+                  label: "10% Discount",
+                  value: `-₹${discountAmount.toFixed(2)}`,
                   type: "discount"
                 },
             {
-              label: "Service Charge (5%)",
-              value: serviceChargeAmount.toFixed(2),
+              label: "Discounted Price",
+              value: discountPrice.toFixed(2),
               prefix: "₹"
             },
             {
-              label: "Tax (18%)",
-              value: taxAmount.toFixed(2),
+              label: "Taxes & Fees (23%)",
+              value: taxesAndFeesAmount.toFixed(2),
               prefix: "₹"
             },
             {
@@ -192,7 +191,7 @@ export const previewRestroBooking = async (req, res) => {
 const calculateAutomaticBilling = async (restaurant, couponCode, numberOfGuests, duration = 60, reqDiscountPercentage = 0, reqDiscountAmount = 0) => {
   try {
 
-    const costPerPerson = restaurant.averageCostForTwo / 2;
+    const costPerPerson = restaurant.discountPrice / 2;
     let baseAmount = costPerPerson * numberOfGuests;
 
     if (duration > 60) {
@@ -205,13 +204,13 @@ const calculateAutomaticBilling = async (restaurant, couponCode, numberOfGuests,
     const isWeekend = bookingDay === 0 || bookingDay === 6;
     if (isWeekend) baseAmount *= 1.15;
 
-    let discountPercentage = reqDiscountPercentage || 0;
-    let discountDescription = "";
+    const actualPrice = baseAmount;
+    let discountPercentage = 10;
+    let discountDescription = "10% Flat Discount";
 
 
     if (couponCode) {
-      discountPercentage = reqDiscountPercentage;
-      discountDescription = "Coupon Applied";
+      discountDescription = "Coupon Applied (10%)";
     }
 
 
@@ -226,40 +225,34 @@ const calculateAutomaticBilling = async (restaurant, couponCode, numberOfGuests,
     });
 
     if (todayBookings === 0) {
-      if (discountPercentage < 15) {
         discountPercentage = 15;
         discountDescription = "First Booking of the Day Discount";
-      }
     }
 
 
     if (numberOfGuests >= 6) {
-      if (discountPercentage < 20) {
         discountPercentage = 20;
         discountDescription = "Group Booking Discount";
-      }
     }
 
-    const discountAmount = (baseAmount * discountPercentage) / 100;
-    const amountAfterDiscount = baseAmount - discountAmount;
-    const taxPercentage = 18;
-    const taxAmount = (amountAfterDiscount * taxPercentage) / 100;
-    const serviceFeePercentage = 5;
-    const serviceFeeAmount = (amountAfterDiscount * serviceFeePercentage) / 100;
-    const totalAmount = amountAfterDiscount + taxAmount + serviceFeeAmount;
+    const discountAmount = (actualPrice * discountPercentage) / 100;
+    const discountPrice = actualPrice - discountAmount;
+    const taxesAndFeesPercentage = 23;
+    const taxesAndFeesAmount = (discountPrice * taxesAndFeesPercentage) / 100;
+    const totalAmount = discountPrice + taxesAndFeesAmount;
 
     return {
       baseAmount: Math.round(baseAmount * 100) / 100,
+      actualPrice: Math.round(actualPrice * 100) / 100,
       discount: {
         percentage: discountPercentage,
         amount: Math.round(discountAmount * 100) / 100,
         description: discountDescription
       },
+      discountPrice: Math.round(discountPrice * 100) / 100,
       villaDiscount: 0,
-      taxPercentage,
-      taxAmount: Math.round(taxAmount * 100) / 100,
-      serviceFeePercentage,
-      serviceFeeAmount: Math.round(serviceFeeAmount * 100) / 100,
+      taxesAndFeesPercentage,
+      taxesAndFeesAmount: Math.round(taxesAndFeesAmount * 100) / 100,
       additionalCharges: [],
       currency: restaurant.currency || "INR",
       totalAmount: Math.round(totalAmount * 100) / 100

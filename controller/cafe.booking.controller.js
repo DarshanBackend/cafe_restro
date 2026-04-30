@@ -72,24 +72,17 @@ export const createCafeBooking = async (req, res) => {
     }
 
     // ---------------- Billing Logic ---------------- //
-    const guestRate = perGuestRate || cafe.pricing?.averagePrice || 200;
+    const guestRate = perGuestRate || cafe.pricing?.discountPrice || 200;
     const totalGuestRate = guestRate * numberOfGuests;
 
-    let discountPercentage = req.body.discountPercentage || 0;
-    let discountAmount = req.body.discountAmount || 0;
-    const taxPercentage = 18;
-    const serviceFeePercentage = 5;
-
-    // Validate bounds
-    if (discountPercentage > 100) discountPercentage = 100;
-    if (discountAmount > totalGuestRate) discountAmount = totalGuestRate;
-
-    // Calculate all values precisely
-    discountAmount = (totalGuestRate * discountPercentage) / 100;
-    const subtotal = totalGuestRate - discountAmount;
-    const taxAmount = (subtotal * taxPercentage) / 100;
-    const serviceFeeAmount = (subtotal * serviceFeePercentage) / 100;
-    const totalAmount = subtotal + taxAmount + serviceFeeAmount;
+    const actualPrice = totalGuestRate;
+    const discountPercentage = 10;
+    const discountAmount = (actualPrice * discountPercentage) / 100;
+    const discountPrice = actualPrice - discountAmount;
+    
+    const taxesAndFeesPercentage = 23;
+    const taxesAndFeesAmount = (discountPrice * taxesAndFeesPercentage) / 100;
+    const totalAmount = discountPrice + taxesAndFeesAmount;
 
     // Optional rounding for cleaner values
     const round = (num) => Math.round(num * 100) / 100;
@@ -97,13 +90,12 @@ export const createCafeBooking = async (req, res) => {
     const finalPricing = {
       perGuestRate: round(guestRate),
       totalGuestRate: round(totalGuestRate),
+      actualPrice: round(actualPrice),
       discountPercentage: round(discountPercentage),
-      couponCode: couponCode || "",
       discountAmount: round(discountAmount),
-      taxPercentage: round(taxPercentage),
-      taxAmount: round(taxAmount),
-      serviceFeePercentage: round(serviceFeePercentage),
-      serviceFeeAmount: round(serviceFeeAmount),
+      discountPrice: round(discountPrice),
+      taxesAndFeesPercentage: round(taxesAndFeesPercentage),
+      taxesAndFeesAmount: round(taxesAndFeesAmount),
       totalAmount: round(totalAmount),
       currency: currency || cafe.pricing?.currency || "INR",
     };
@@ -344,14 +336,9 @@ export const previewCafeBooking = async (req, res) => {
       });
     }
 
-    const baseRatePerHour = cafe.pricing?.averagePrice || 100; // fallback ₹100/hr
+    const baseRatePerHour = cafe.pricing?.discountPrice || 100; // Using offered discount price as base
     const currency = cafe.pricing?.currency || "INR";
     const baseSubtotal = baseRatePerHour * durationHours * numberOfTables;
-
-    // 🎯 Automatic discounts based on duration & tables
-    let discountPercentage = 0;
-    if (durationHours >= 3) discountPercentage += 10;
-    if (numberOfTables > 2) discountPercentage += 5;
 
     const dayOfWeek = bookingDateObj.getDay();
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
@@ -362,33 +349,26 @@ export const previewCafeBooking = async (req, res) => {
 
     const subtotalBeforeDiscount = baseSubtotal * weekendMultiplier * peakHourMultiplier;
 
-    // 💸 Apply system discount first
-    const discountAmount = (subtotalBeforeDiscount * discountPercentage) / 100;
-    let discountedSubtotal = subtotalBeforeDiscount - discountAmount;
+    const actualPrice = subtotalBeforeDiscount;
+    const discountPercentage = 10;
+    const discountAmount = (actualPrice * discountPercentage) / 100;
+    const discountPrice = actualPrice - discountAmount;
 
-    // 🎟️ Coupon Logic
+    // 🎟️ Coupon Logic (Removed custom discounts)
     let couponDetails = null;
-    let couponDiscountAmount = req.body.discountAmount || 0;
-    let couponPercentage = req.body.discountPercentage || 0;
-
     if (couponCode) {
       couponDetails = {
         code: couponCode,
-        discountPercent: couponPercentage,
-        discountApplied: couponDiscountAmount,
-        description: "Coupon Applied"
+        discountPercent: discountPercentage,
+        discountApplied: discountAmount,
+        description: "10% Flat Discount"
       };
-      discountedSubtotal -= couponDiscountAmount;
-      if (discountedSubtotal < 0) discountedSubtotal = 0;
     }
 
     // 💰 Charges & Total Calculation
-    const serviceChargePercentage = 5;
-    const taxPercentage = 18;
-
-    const serviceChargeAmount = (discountedSubtotal * serviceChargePercentage) / 100;
-    const taxAmount = (discountedSubtotal * taxPercentage) / 100;
-    const totalAmount = discountedSubtotal + serviceChargeAmount + taxAmount;
+    const taxesAndFeesPercentage = 23;
+    const taxesAndFeesAmount = (discountPrice * taxesAndFeesPercentage) / 100;
+    const totalAmount = discountPrice + taxesAndFeesAmount;
 
     // ✅ Response
     return res.status(200).json({
@@ -427,30 +407,18 @@ export const previewCafeBooking = async (req, res) => {
               type: "surcharge"
             },
             {
-              label: "Discount",
-              value: discountPercentage > 0 ? `${discountPercentage}%` : "0%",
+              label: "10% Discount",
+              value: `-₹${discountAmount.toFixed(2)}`,
               type: "discount"
             },
             {
-              label: "Subtotal After Discount",
-              value: (subtotalBeforeDiscount - discountAmount).toFixed(2),
-              prefix: "₹"
-            },
-            ...(couponDiscountAmount > 0
-              ? [{
-                  label: `Coupon (${couponCode})`,
-                  value: `-₹${couponDiscountAmount.toFixed(2)}`,
-                  type: "coupon"
-                }]
-              : []),
-            {
-              label: "Service Charge (5%)",
-              value: serviceChargeAmount.toFixed(2),
+              label: "Discounted Price",
+              value: discountPrice.toFixed(2),
               prefix: "₹"
             },
             {
-              label: "Tax (18%)",
-              value: taxAmount.toFixed(2),
+              label: "Taxes & Fees (23%)",
+              value: taxesAndFeesAmount.toFixed(2),
               prefix: "₹"
             },
             {

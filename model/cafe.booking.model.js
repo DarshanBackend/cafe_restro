@@ -69,13 +69,13 @@ const cafeBookingSchema = new mongoose.Schema(
     pricing: {
       perGuestRate: { type: Number, required: true, min: 0 },
       totalGuestRate: { type: Number, default: 0 },
-      discountPercentage: { type: Number, default: 0 },
+      actualPrice: { type: Number, default: 0 },
+      discountPercentage: { type: Number, default: 10 },
       couponCode: { type: String, default: null },
       discountAmount: { type: Number, default: 0 },
-      taxPercentage: { type: Number, default: 18 },
-      taxAmount: { type: Number, default: 0 },
-      serviceFeePercentage: { type: Number, default: 5 },
-      serviceFeeAmount: { type: Number, default: 0 },
+      discountPrice: { type: Number, default: 0 },
+      taxesAndFeesPercentage: { type: Number, default: 23 },
+      taxesAndFeesAmount: { type: Number, default: 0 },
       totalAmount: { type: Number, default: 0 },
       currency: { type: String, default: "INR" },
     },
@@ -101,26 +101,26 @@ cafeBookingSchema.pre("validate", function (next) {
     this.pricing.totalGuestRate = this.pricing.perGuestRate * this.numberOfGuests;
   }
 
+  if (!this.pricing.actualPrice) {
+    this.pricing.actualPrice = this.pricing.totalGuestRate;
+  }
+
   if (!this.pricing.discountAmount && this.pricing.discountPercentage) {
     this.pricing.discountAmount =
-      (this.pricing.totalGuestRate * this.pricing.discountPercentage) / 100;
+      (this.pricing.actualPrice * this.pricing.discountPercentage) / 100;
   }
 
-  const subtotal = this.pricing.totalGuestRate - (this.pricing.discountAmount || 0);
-
-  if (!this.pricing.taxAmount) {
-    this.pricing.taxAmount = (subtotal * this.pricing.taxPercentage) / 100;
+  if (!this.pricing.discountPrice) {
+    this.pricing.discountPrice = this.pricing.actualPrice - (this.pricing.discountAmount || 0);
   }
 
-  if (!this.pricing.serviceFeeAmount && this.pricing.serviceFeePercentage) {
-    this.pricing.serviceFeeAmount = (subtotal * this.pricing.serviceFeePercentage) / 100;
+  if (!this.pricing.taxesAndFeesAmount && this.pricing.taxesAndFeesPercentage) {
+    this.pricing.taxesAndFeesAmount = (this.pricing.discountPrice * this.pricing.taxesAndFeesPercentage) / 100;
   }
 
   if (!this.pricing.totalAmount) {
     this.pricing.totalAmount =
-      subtotal +
-      this.pricing.taxAmount +
-      (this.pricing.serviceFeeAmount || 0);
+      this.pricing.discountPrice + (this.pricing.taxesAndFeesAmount || 0);
   }
 
   next();

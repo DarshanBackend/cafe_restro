@@ -37,9 +37,14 @@ const bookingSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
+  actualPrice: {
+    type: Number,
+    required: true,
+    min: 0
+  },
   discountPercentage: {
     type: Number,
-    default: 0,
+    default: 10,
     min: 0,
     max: 100
   },
@@ -48,22 +53,17 @@ const bookingSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
-  taxPercentage: {
-    type: Number,
-    default: 18,
-    min: 0
-  },
-  taxAmount: {
+  discountPrice: {
     type: Number,
     default: 0,
     min: 0
   },
-  serviceFeePercentage: {
+  taxesAndFeesPercentage: {
     type: Number,
-    default: 5,
+    default: 23,
     min: 0
   },
-  serviceFeeAmount: {
+  taxesAndFeesAmount: {
     type: Number,
     default: 0,
     min: 0

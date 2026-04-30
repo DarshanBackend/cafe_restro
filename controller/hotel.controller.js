@@ -495,3 +495,57 @@ export const mainSearchHotels = async (req, res) => {
   }
 };
 
+export const updateHotel = async (req, res) => {
+  try {
+    const { hotelId } = req.params;
+    const {
+      name,
+      description,
+      address,
+      location,
+      amenities,
+      priceRange,
+      Rent,
+      rooms,
+      ourService,
+    } = req.body;
+
+    const hotel = await hotelModel.findById(hotelId);
+    if (!hotel) return sendError(res, 404, "Hotel not found");
+
+    // Handle JSON fields
+    if (name) hotel.name = name;
+    if (description) hotel.description = description;
+    if (address) hotel.address = typeof address === "string" ? JSON.parse(address) : address;
+    if (location) hotel.location = typeof location === "string" ? JSON.parse(location) : location;
+    if (amenities) hotel.amenities = typeof amenities === "string" ? JSON.parse(amenities) : amenities;
+    if (priceRange) hotel.priceRange = typeof priceRange === "string" ? JSON.parse(priceRange) : priceRange;
+    if (Rent !== undefined) hotel.Rent = Rent;
+    if (ourService) hotel.ourService = typeof ourService === "string" ? JSON.parse(ourService) : ourService;
+
+    // Handle rooms update
+    if (rooms) {
+      let parsedRooms = typeof rooms === "string" ? JSON.parse(rooms) : rooms;
+      
+      // Ensure rooms have the correct price fields if they are being updated
+      hotel.rooms = parsedRooms.map(room => ({
+        ...room,
+        actualPrice: room.actualPrice ? Number(room.actualPrice) : undefined,
+        discountPrice: room.discountPrice ? Number(room.discountPrice) : undefined
+      }));
+    }
+
+    // Handle images if any (from middleware)
+    if (req.files?.hotelImages) {
+      hotel.images = [...(hotel.images || []), ...req.files.hotelImages];
+    }
+
+    await hotel.save();
+
+    return sendSuccess(res, "Hotel updated successfully", hotel);
+  } catch (error) {
+    log.error("updateHotel Error:", error);
+    return sendError(res, 500, "Failed to update hotel", error.message);
+  }
+};
+

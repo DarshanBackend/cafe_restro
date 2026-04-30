@@ -21,7 +21,8 @@ export const createNewCafe = async (req, res) => {
       themeCategoryName,
       amenities,
       services,
-      averagePrice,
+      actualPrice,
+      discountPrice,
       currency,
       popular,
       operatingHours,
@@ -230,7 +231,8 @@ export const createNewCafe = async (req, res) => {
         mapLink: parsedContact?.mapLink || "",
       },
       pricing: {
-        averagePrice: averagePrice ? parseFloat(averagePrice) : 0,
+        actualPrice: actualPrice ? parseFloat(actualPrice) : 0,
+        discountPrice: discountPrice ? parseFloat(discountPrice) : 0,
         currency: currency || "INR",
       },
       popular: popular === "true" || popular === true,
@@ -414,7 +416,8 @@ export const updateCafe = async (req, res) => {
       description,
       themeCategoryName,
       popular,
-      averagePrice,
+      actualPrice,
+      discountPrice,
       currency,
       address,
       city,
@@ -448,8 +451,9 @@ export const updateCafe = async (req, res) => {
 
     // ✅ Pricing
     updateData.pricing = {
-      averagePrice: Number(averagePrice) || existingCafe.pricing?.averagePrice || 0,
-      currency: currency || existingCafe.pricing?.currency || "USD",
+      actualPrice: Number(actualPrice) || existingCafe.pricing?.actualPrice || 0,
+      discountPrice: Number(discountPrice) || existingCafe.pricing?.discountPrice || 0,
+      currency: currency || existingCafe.pricing?.currency || "INR",
     };
 
     // ✅ Handle JSON fields
@@ -596,9 +600,9 @@ export const getCafesByLocation = async (req, res) => {
     if (popular !== undefined) filter.popular = popular === "true";
 
     if (minPrice || maxPrice) {
-      filter["pricing.averagePrice"] = {};
-      if (minPrice) filter["pricing.averagePrice"].$gte = Number(minPrice);
-      if (maxPrice) filter["pricing.averagePrice"].$lte = Number(maxPrice);
+      filter["pricing.discountPrice"] = {};
+      if (minPrice) filter["pricing.discountPrice"].$gte = Number(minPrice);
+      if (maxPrice) filter["pricing.discountPrice"].$lte = Number(maxPrice);
     }
 
     if (Object.keys(filter).length === 0) {
@@ -759,15 +763,15 @@ export const mainSearchCafes = async (req, res) => {
       status: "active",
     };
 
-    if (people) query["pricing.averagePrice"] = { $exists: true };
+    if (people) query["pricing.discountPrice"] = { $exists: true };
     if (rating) query["averageRating"] = { $gte: Number(rating) };
     if (propertyType)
       query["themeCategory.name"] = { $regex: new RegExp(propertyType, "i") };
 
     if (priceMin || priceMax) {
-      query["pricing.averagePrice"] = {};
-      if (priceMin) query["pricing.averagePrice"].$gte = Number(priceMin);
-      if (priceMax) query["pricing.averagePrice"].$lte = Number(priceMax);
+      query["pricing.discountPrice"] = {};
+      if (priceMin) query["pricing.discountPrice"].$gte = Number(priceMin);
+      if (priceMax) query["pricing.discountPrice"].$lte = Number(priceMax);
     }
 
     const sortOptions = {};
@@ -776,7 +780,7 @@ export const mainSearchCafes = async (req, res) => {
         sortOptions.averageRating = -1;
         break;
       case "price":
-        sortOptions["pricing.averagePrice"] = 1;
+        sortOptions["pricing.discountPrice"] = 1;
         break;
       case "popular":
         sortOptions.popular = -1;

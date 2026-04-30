@@ -4,7 +4,7 @@ import { UserAuth } from '../middleware/UserAuth.js';
 import { adminLogin, adminUpdate, deleteAdmin, getAdminById, getAllAdmins, newAdminRegister } from '../controller/admin.controller.js';
 import { getWalletDetails, addMoneyToWallet, verifyWalletPayment } from '../controller/wallet.controller.js';
 import { AdminAuth } from '../middleware/AdminAuth.js';
-import { createNewHotel, deleteHotels, getAllHotels, getCitySuggestions, getHotelByCityName, getHotelById, mainSearchHotels, searchHotels } from '../controller/hotel.controller.js';
+import { createNewHotel, deleteHotels, getAllHotels, getCitySuggestions, getHotelByCityName, getHotelById, mainSearchHotels, searchHotels, updateHotel } from '../controller/hotel.controller.js';
 import { handleMulterErrors, processAndUploadImages, uploadFiles } from '../middleware/multer.middleware.js';
 import { validateHotelDuplicate } from '../middleware/validateHotelDuplicate.js';
 import { createBooking, getMyHotelBookings, hotelAdminBookings, previewHotelBooking, updateHotelBookingStatus, updateHotelPaymentStatus, } from '../controller/hotel.booking.controller.js';
@@ -86,7 +86,7 @@ indexRouter.get('/luxury-stays', getLuxuryStays);
 indexRouter.post("/createNewHotel", AdminAuth, uploadFiles, handleMulterErrors, processAndUploadImages, createNewHotel);
 indexRouter.get("/getAllHotels", getAllHotels);
 indexRouter.get("/getHotelById/:hotelId", getHotelById);
-// indexRouter.patch("/updateHotel",AdminAuth, updateHotel);
+indexRouter.patch("/updateHotel/:hotelId", AdminAuth, uploadFiles, updateHotel);
 indexRouter.delete("/deleteHotel/:hotelId", AdminAuth, deleteHotels);
 //gethotelBy city name
 indexRouter.get("/getHotelByCityName/:name", getHotelByCityName);
@@ -301,7 +301,7 @@ indexRouter.get("/s3/list", async (req, res) => {
     return res.status(200).json({ message: "S3 images listed successfully", total: allUrls.length, images: allUrls });
   } catch (error) {
     log.error("List S3 Images Error:" + error.message);
-    return res.status(500).json({ message: "Failed to list S3 images", error });
+    return res.status(500).json({ message: "Failed to list S3 images", error: error.message });
   }
 });
 

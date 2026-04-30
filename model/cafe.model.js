@@ -122,7 +122,11 @@ const CafeSchema = new mongoose.Schema({
     }
   },
   pricing: {
-    averagePrice: {
+    actualPrice: {
+      type: Number,
+      min: [0, "Price cannot be negative"]
+    },
+    discountPrice: {
       type: Number,
       min: [0, "Price cannot be negative"]
     },

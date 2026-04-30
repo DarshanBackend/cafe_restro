@@ -354,7 +354,7 @@ export const deleteUser = async (req, res) => {
 
 export const googleLogin = async (req, res) => {
   try {
-    const { email, name, avatar, uid, deviceName, ipAddress } = req.body;
+    const { email, name, avatar, uid, deviceName, ipAddress, referralCode } = req.body;
 
     if (!email || !name) {
       return sendBadRequest(res, "Name and email are required");
@@ -395,6 +395,14 @@ export const googleLogin = async (req, res) => {
     } else {
       const generatedReferralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
+      let referredByUserId = null;
+      if (referralCode) {
+        const referrer = await userModel.findOne({ referralCode });
+        if (referrer) {
+          referredByUserId = referrer._id;
+        }
+      }
+
       user = new userModel({
         name,
         email,
@@ -402,6 +410,7 @@ export const googleLogin = async (req, res) => {
         avatar: avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
         password: "SOCIAL_LOGIN",
         referralCode: generatedReferralCode,
+        referredBy: referredByUserId,
         sessions: [
           {
             deviceName: deviceName || "Unknown Device",
@@ -414,6 +423,39 @@ export const googleLogin = async (req, res) => {
       });
 
       await user.save();
+
+      // Reward logic for referral
+      if (referredByUserId) {
+        const SIGNUP_BONUS = 20;
+        const REFERRER_BONUS = 20;
+
+        // Reward New User
+        user.walletBalance = (user.walletBalance || 0) + SIGNUP_BONUS;
+        await user.save();
+        const newUserTxn = new WalletTransactionModel({
+          userId: user._id,
+          amount: SIGNUP_BONUS,
+          type: "credit",
+          description: "Sign-up Bonus via Referral (Google Login)",
+          status: "completed"
+        });
+        await newUserTxn.save();
+
+        // Reward Referrer
+        const referrerUser = await userModel.findById(referredByUserId);
+        if (referrerUser) {
+          referrerUser.walletBalance = (referrerUser.walletBalance || 0) + REFERRER_BONUS;
+          await referrerUser.save();
+          const referrerTxn = new WalletTransactionModel({
+            userId: referrerUser._id,
+            amount: REFERRER_BONUS,
+            type: "credit",
+            description: `Referral Bonus for inviting ${user.name} (Google Login)`,
+            status: "completed"
+          });
+          await referrerTxn.save();
+        }
+      }
       log.success(`${user.name} account created`);
       isNew = true;
     }

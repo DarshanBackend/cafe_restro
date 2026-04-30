@@ -10,9 +10,14 @@ const hallSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Hall description is required']
   },
-  price: {
+  actualPrice: {
     type: Number,
-    required: [true, 'Price is required'],
+    required: [true, 'Actual price is required'],
+    min: 0
+  },
+  discountPrice: {
+    type: Number,
+    required: [true, 'Discount price is required'],
     min: 0
   },
   location: {

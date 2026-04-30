@@ -17,7 +17,8 @@ export const createNewRestaurant = async (req, res) => {
       address,
       contact,
       cuisineTypes,
-      averageCostForTwo,
+      actualPrice,
+      discountPrice,
       currency,
       operatingHours,
       amenities,
@@ -31,7 +32,8 @@ export const createNewRestaurant = async (req, res) => {
 
     // Basic validation
     if (!name?.trim()) return sendBadRequest(res, "Restaurant name is required");
-    if (!averageCostForTwo) return sendBadRequest(res, "Average cost for two is required");
+    if (!actualPrice) return sendBadRequest(res, "Actual price is required");
+    if (!discountPrice) return sendBadRequest(res, "Discount price is required");
     if (!address) return sendBadRequest(res, "Address is required");
 
     // Note: Duplicate check is done in validateRestroDuplicate middleware BEFORE S3 upload
@@ -116,7 +118,8 @@ export const createNewRestaurant = async (req, res) => {
       address: parsedAddress,
       contact: parsedContact,
       cuisineTypes: parsed(cuisineTypes),
-      averageCostForTwo,
+      actualPrice,
+      discountPrice,
       currency: currency || "INR",
       operatingHours: parsedOperatingHours,
       amenities: parsed(amenities),
@@ -222,7 +225,7 @@ export const getAllRestos = async (req, res) => {
 
     // Cost filter
     if (maxCost) {
-      filter.averageCostForTwo = { $lte: parseFloat(maxCost) };
+      filter.discountPrice = { $lte: parseFloat(maxCost) };
     }
 
     // Table capacity filter
@@ -299,7 +302,7 @@ export const filterRestaurants = async (req, res) => {
     if (service) filter.services = { $in: [service] };
     if (rating) filter["rating.average"] = { $gte: parseFloat(rating) };
     if (minCost || maxCost) {
-      filter.averageCostForTwo = {
+      filter.discountPrice = {
         ...(minCost && { $gte: parseFloat(minCost) }),
         ...(maxCost && { $lte: parseFloat(maxCost) }),
       };
@@ -388,7 +391,7 @@ export const searchRestaurants = async (req, res) => {
     if (service) filter.services = { $in: [service] };
     if (rating) filter["rating.average"] = { $gte: parseFloat(rating) };
     if (minCost || maxCost) {
-      filter.averageCostForTwo = {
+      filter.discountPrice = {
         ...(minCost && { $gte: parseFloat(minCost) }),
         ...(maxCost && { $lte: parseFloat(maxCost) }),
       };
@@ -469,6 +472,8 @@ export const updateRestaurant = async (req, res) => {
 
     const updateData = {
       ...req.body,
+      actualPrice: req.body.actualPrice ? Number(req.body.actualPrice) : undefined,
+      discountPrice: req.body.discountPrice ? Number(req.body.discountPrice) : undefined,
       cuisineTypes: parsed(req.body.cuisineTypes),
       amenities: parsed(req.body.amenities),
       services: parsed(req.body.services),

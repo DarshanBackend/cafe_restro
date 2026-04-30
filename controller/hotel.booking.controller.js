@@ -55,23 +55,19 @@ export const createBooking = async (req, res) => {
       Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24))
     );
 
-    const roomRatePerNight = room.pricePerNight;
+    const roomRatePerNight = room.discountPrice; // Using the offered discount price as base
     const totalRoomRate = roomRatePerNight * numberOfNights * numberOfRooms;
 
-    let discountPercentage = req.body.discountPercentage || 0;
-    let discountAmount = req.body.discountAmount || 0;
+    // Fixed mandatory 10% discount logic on top of the offered price
+    const actualPrice = totalRoomRate;
+    const discountPercentage = 10;
+    const discountAmount = (actualPrice * discountPercentage) / 100;
+    const discountPrice = actualPrice - discountAmount;
 
-    // Validate that discount amount is reasonable if provided directly
-    if (discountPercentage > 100) discountPercentage = 100;
-    if (discountAmount > totalRoomRate) discountAmount = totalRoomRate;
-
-    const subtotal = totalRoomRate - discountAmount;
-    const taxPercentage = 18;
-    const serviceFeePercentage = 5;
-    
-    const taxAmount = (subtotal * taxPercentage) / 100;
-    const serviceFeeAmount = (subtotal * serviceFeePercentage) / 100;
-    const totalAmount = subtotal + taxAmount + serviceFeeAmount;
+    // Tax and Service Fee combined (18% + 5% = 23%)
+    const taxesAndFeesPercentage = 23;
+    const taxesAndFeesAmount = (discountPrice * taxesAndFeesPercentage) / 100;
+    const totalAmount = discountPrice + taxesAndFeesAmount;
     let user = {};
 
     if (isMySelf) {
@@ -116,12 +112,12 @@ export const createBooking = async (req, res) => {
       pricing: {
         roomRatePerNight,
         totalRoomRate,
+        actualPrice,
         discountPercentage,
         discountAmount,
-        taxPercentage,
-        taxAmount,
-        serviceFeePercentage,
-        serviceFeeAmount,
+        discountPrice,
+        taxesAndFeesPercentage,
+        taxesAndFeesAmount,
         totalAmount,
         currency: "INR",
       },
@@ -265,29 +261,27 @@ export const previewHotelBooking = async (req, res) => {
 
     const numberOfNights = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
 
-    const TAX_PERCENT = 18;
-    const SERVICE_FEE_PERCENT = 5;
+    const TAXES_AND_FEES_PERCENT = 23;
 
-    const roomRatePerNight = room.pricePerNight;
+    const roomRatePerNight = room.discountPrice;
     const totalRoomRate = roomRatePerNight * numberOfNights * numberOfRooms;
 
-    let discountPercent = req.body.discountPercentage || 0;
-    let discountAmount = req.body.discountAmount || 0;
+    const actualPrice = totalRoomRate;
+    const discountPercent = 10;
+    const discountAmount = (actualPrice * discountPercent) / 100;
+    const discountPrice = actualPrice - discountAmount;
     let couponDetails = null;
 
     if (couponCode) {
-      // Assuming frontend pre-calculated, just show the values
       couponDetails = {
         code: couponCode,
         discountPercent,
-        description: "Coupon Applied",
+        description: "10% Discount Applied",
       };
     }
 
-    let subtotal = totalRoomRate - discountAmount;
-    const taxAmount = (subtotal * TAX_PERCENT) / 100;
-    const serviceFeeAmount = (subtotal * SERVICE_FEE_PERCENT) / 100;
-    const totalAmount = subtotal + taxAmount + serviceFeeAmount;
+    const taxesAndFeesAmount = (discountPrice * TAXES_AND_FEES_PERCENT) / 100;
+    const totalAmount = discountPrice + taxesAndFeesAmount;
 
     return res.status(200).json({
       success: true,
@@ -313,14 +307,12 @@ export const previewHotelBooking = async (req, res) => {
           adults,
         },
         costBreakdown: {
-          totalRoomRate,
-          discountPercent: discountPercent,
-          discountAmount: discountAmount,
-          subtotal,
-          taxPercent: TAX_PERCENT,
-          taxAmount,
-          serviceFeePercent: SERVICE_FEE_PERCENT,
-          serviceFeeAmount: serviceFeeAmount,
+          actualPrice,
+          discountPercent,
+          discountAmount,
+          discountPrice,
+          taxesAndFeesPercent: TAXES_AND_FEES_PERCENT,
+          taxesAndFeesAmount,
           totalAmount: Number(totalAmount.toFixed(2)),
           currency: "INR",
         },
