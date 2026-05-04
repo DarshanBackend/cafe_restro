@@ -18,7 +18,7 @@ export const createNewCafe = async (req, res) => {
       country,
       lat,
       lng,
-      themeCategoryName,
+      themeCategoryId,
       amenities,
       services,
       actualPrice,
@@ -36,20 +36,17 @@ export const createNewCafe = async (req, res) => {
       });
     }
 
-    let validCafeThemeNames = ["Cazy", "Modern", "Rustic", "Vintage", "Industrial", "Minimalist"];
-
-    if (!validCafeThemeNames.includes(themeCategoryName)) {
-      return sendNotFound(
-        res,
-        `Valid theme names are: ${validCafeThemeNames.join(", ")}`
-      );
-    }
-
-
-    if (!themeCategoryName?.trim()) {
+    if (!themeCategoryId) {
       return res.status(400).json({
         success: false,
-        message: "Theme category name is required",
+        message: "Theme category ID is required",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(themeCategoryId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid theme category ID",
       });
     }
 
@@ -98,56 +95,12 @@ export const createNewCafe = async (req, res) => {
       }
     }
 
-    let themeCategoryImageUrl = null;
     let imageUrls = [];
 
     if (req.files && req.files.length > 0) {
-      // Separate theme category and main cafe images
-      const themeImageFiles = req.files.filter(
-        (file) => file.fieldname === "themeCategoryImage"
-      );
       const cafeImageFiles = req.files.filter(
         (file) => file.fieldname === "images"
       );
-
-      if (themeImageFiles.length > 0) {
-        const themeImageFile = themeImageFiles[0];
-        const allowedMimeTypes = [
-          "image/jpeg",
-          "image/jpg",
-          "image/png",
-          "image/webp",
-        ];
-
-        if (!allowedMimeTypes.includes(themeImageFile.mimetype)) {
-          return res.status(400).json({
-            success: false,
-            message:
-              "Invalid theme category image type. Only JPEG, PNG, and WebP allowed.",
-          });
-        }
-
-        try {
-          const resizedBuffer = await resizeImage(themeImageFile.buffer, {
-            width: 800,
-            height: 600,
-            quality: 80,
-          });
-
-          themeCategoryImageUrl = await uploadToS3(
-            resizedBuffer,
-            themeImageFile.originalname,
-            themeImageFile.mimetype,
-            "cafes/themes"
-          );
-        } catch (err) {
-          console.error("Theme category image processing error:", err);
-          return res.status(500).json({
-            success: false,
-            message: "Failed to process theme category image",
-          });
-        }
-      }
 
       if (cafeImageFiles.length > 0) {
         if (cafeImageFiles.length > 10) {
@@ -197,12 +150,6 @@ export const createNewCafe = async (req, res) => {
       }
     }
 
-    const themeCategory = {
-      name: themeCategoryName.trim(),
-      image: themeCategoryImageUrl,
-    };
-
-
     const newCafe = new cafeModel({
       name: name.trim(),
       description: description?.trim() || "",
@@ -216,7 +163,7 @@ export const createNewCafe = async (req, res) => {
           lng: lngNum || undefined,
         },
       },
-      themeCategory,
+      themeCategoryId,
       images: imageUrls,
       amenities: parsedAmenities,
       services: parsedServices,
@@ -317,6 +264,7 @@ export const getAllCafes = async (req, res) => {
       .skip((pageNumber - 1) * pageSize)
       .limit(pageSize)
       .select("-__v")
+      .populate("themeCategoryId", "name image")
       .populate("createdBy", "name email");
 
     const total = await cafeModel.countDocuments(filter);
@@ -358,6 +306,7 @@ export const getCafeById = async (req, res) => {
     const cafe = await cafeModel
       .findById(id)
       .select('-__v')
+      .populate("themeCategoryId", "name image")
       .populate('createdBy', 'name email');
 
     if (!cafe) {
@@ -408,109 +357,95 @@ export const updateCafe = async (req, res) => {
       });
     }
 
+    const body = req.body || {};
+
     const updateData = {};
 
-    // ✅ Parse text fields from FormData
-    const {
-      name,
-      description,
-      themeCategoryName,
-      popular,
-      actualPrice,
-      discountPrice,
-      currency,
-      address,
-      city,
-      state,
-      country,
-      lat,
-      lng,
-      status,
-      amenities,
-      services,
-      operatingHours,
-      contact,
-    } = req.body;
+    // Basic Fields
+    if (body.name) updateData.name = body.name.trim();
+    if (body.description) updateData.description = body.description.trim();
+    if (body.status) updateData.status = body.status;
+    if (body.popular !== undefined) updateData.popular = body.popular === "true" || body.popular === true;
 
-    if (name) updateData.name = name;
-    if (description) updateData.description = description;
-    if (status) updateData.status = status;
-    if (popular !== undefined) updateData.popular = popular === "true";
-
-    // ✅ Location
     updateData.location = {
-      address: address || existingCafe.location?.address || "",
-      city: city || existingCafe.location?.city || "",
-      state: state || existingCafe.location?.state || "",
-      country: country || existingCafe.location?.country || "",
+      address: body.address || existingCafe.location?.address,
+      city: body.city || existingCafe.location?.city,
+      state: body.state || existingCafe.location?.state,
+      country: body.country || existingCafe.location?.country,
       coordinates: {
-        lat: parseFloat(lat) || existingCafe.location?.coordinates?.lat || 0,
-        lng: parseFloat(lng) || existingCafe.location?.coordinates?.lng || 0,
+        lat: body.lat ? parseFloat(body.lat) : existingCafe.location?.coordinates?.lat,
+        lng: body.lng ? parseFloat(body.lng) : existingCafe.location?.coordinates?.lng,
       },
     };
 
-    // ✅ Pricing
+    // Pricing Updates
     updateData.pricing = {
-      actualPrice: Number(actualPrice) || existingCafe.pricing?.actualPrice || 0,
-      discountPrice: Number(discountPrice) || existingCafe.pricing?.discountPrice || 0,
-      currency: currency || existingCafe.pricing?.currency || "INR",
+      actualPrice: body.actualPrice ? Number(body.actualPrice) : existingCafe.pricing?.actualPrice,
+      discountPrice: body.discountPrice ? Number(body.discountPrice) : existingCafe.pricing?.discountPrice,
+      currency: body.currency || existingCafe.pricing?.currency || "INR",
     };
 
-    // ✅ Handle JSON fields
-    if (amenities) updateData.amenities = JSON.parse(amenities);
-    if (services) updateData.services = JSON.parse(services);
-    if (operatingHours) updateData.operatingHours = JSON.parse(operatingHours);
-    if (contact) updateData.contact = JSON.parse(contact);
-
-    // ✅ Handle themeCategory image upload
-    if (req.files?.themeCategoryImage?.[0]) {
-      const themeFile = req.files.themeCategoryImage[0];
-      const resized = await resizeImage(themeFile.buffer, { width: 800, height: 600, quality: 80 });
-      const themeUrl = await uploadToS3(
-        resized,
-        `cafes/themes/${Date.now()}_${themeFile.originalname}`,
-        themeFile.mimetype,
-        "cafes"
-      );
-      updateData.themeCategory = {
-        name: themeCategoryName || existingCafe.themeCategory?.name || "",
-        image: themeUrl,
-      };
-    } else if (themeCategoryName) {
-      updateData.themeCategory = {
-        name: themeCategoryName,
-        image: existingCafe.themeCategory?.image || "",
-      };
-    }
-
-    // ✅ Handle new cafe images
-    if (req.files?.images?.length > 0) {
-      const newImages = [];
-      for (const file of req.files.images) {
-        const resized = await resizeImage(file.buffer, { width: 1024, height: 768, quality: 80 });
-        const url = await uploadToS3(
-          resized,
-          `cafes/${Date.now()}_${file.originalname}`,
-          file.mimetype,
-          "cafes"
-        );
-        newImages.push(url);
+    // JSON parsing with error handling
+    const safeParse = (data, fallback) => {
+      try {
+        return typeof data === "string" ? JSON.parse(data) : data;
+      } catch (e) {
+        return fallback;
       }
-      updateData.images = [...(existingCafe.images || []), ...newImages];
+    };
+
+    if (body.amenities) updateData.amenities = safeParse(body.amenities, existingCafe.amenities);
+    if (body.services) updateData.services = safeParse(body.services, existingCafe.services);
+    if (body.operatingHours) updateData.operatingHours = safeParse(body.operatingHours, existingCafe.operatingHours);
+    if (body.contact) updateData.contact = safeParse(body.contact, existingCafe.contact);
+
+    if (body.themeCategoryId) {
+      if (mongoose.Types.ObjectId.isValid(body.themeCategoryId)) {
+        updateData.themeCategoryId = body.themeCategoryId;
+      }
     }
 
-    // ✅ Update the document
-    const updatedCafe = await cafeModel
-      .findByIdAndUpdate(id, { $set: updateData }, { new: true, runValidators: true })
-      .select("-__v");
+    // 3. Image Upload Handling
+    // કારણ કે તમે route માં upload.any() વાપર્યું છે, ફાઈલ્સ req.files માં હશે
+    if (req.files && req.files.length > 0) {
+      const imageFiles = req.files.filter(f => f.fieldname === "images");
+      const newImages = [];
+
+      for (const file of imageFiles) {
+        try {
+          const resized = await resizeImage(file.buffer, { width: 1024, height: 768, quality: 80 });
+          const url = await uploadToS3(
+            resized,
+            `cafes/${Date.now()}_${file.originalname}`,
+            file.mimetype,
+            "cafes"
+          );
+          newImages.push(url);
+        } catch (err) {
+          log.error("Image Processing Error:", err.message);
+        }
+      }
+
+      if (newImages.length > 0) {
+        updateData.images = [...(existingCafe.images || []), ...newImages];
+      }
+    }
+
+    // 4. Update the DB
+    const updatedCafe = await cafeModel.findByIdAndUpdate(
+      id,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).populate("themeCategoryId", "name image");
 
     return res.status(200).json({
       success: true,
       message: "Cafe updated successfully",
       data: updatedCafe,
     });
+
   } catch (error) {
-    console.error("Update Cafe Error:", error.message);
+    console.error("Update Cafe Error:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to update cafe",
@@ -518,7 +453,6 @@ export const updateCafe = async (req, res) => {
     });
   }
 };
-
 
 
 // Delete cafe
@@ -551,11 +485,6 @@ export const deleteCafe = async (req, res) => {
 
     const imagesToDelete = [];
 
-    if (cafe.themeCategory?.image) {
-      const key = cafe.themeCategory.image.split(".amazonaws.com/")[1];
-      if (key) imagesToDelete.push(key);
-    }
-
     if (Array.isArray(cafe.images) && cafe.images.length > 0) {
       cafe.images.forEach((imgUrl) => {
         const key = imgUrl.split(".amazonaws.com/")[1];
@@ -586,7 +515,7 @@ export const deleteCafe = async (req, res) => {
 // Get cafes by location
 export const getCafesByLocation = async (req, res) => {
   try {
-    const { city, state, country, theme, status, minPrice, maxPrice, popular } = req.query;
+    const { city, state, country, themeId, status, minPrice, maxPrice, popular } = req.query;
 
     // Build dynamic filter
     const filter = {};
@@ -595,7 +524,7 @@ export const getCafesByLocation = async (req, res) => {
     if (state) filter["location.state"] = { $regex: new RegExp(state, "i") };
     if (country) filter["location.country"] = { $regex: new RegExp(country, "i") };
 
-    if (theme) filter["themeCategory.name"] = { $regex: new RegExp(theme, "i") };
+    if (themeId) filter.themeCategoryId = themeId;
     if (status) filter.status = status;
     if (popular !== undefined) filter.popular = popular === "true";
 
@@ -684,7 +613,6 @@ export const searchCafes = async (req, res) => {
         { "location.city": searchRegex },
         { "location.state": searchRegex },
         { "location.country": searchRegex },
-        { "themeCategory.name": searchRegex },
         { amenities: { $in: [searchRegex] } },
         { services: { $in: [searchRegex] } }
       ]
@@ -739,7 +667,7 @@ export const mainSearchCafes = async (req, res) => {
       priceMin,
       priceMax,
       rating,
-      propertyType,
+      themeId,
       offer,
     } = req.query;
 
@@ -765,8 +693,7 @@ export const mainSearchCafes = async (req, res) => {
 
     if (people) query["pricing.discountPrice"] = { $exists: true };
     if (rating) query["averageRating"] = { $gte: Number(rating) };
-    if (propertyType)
-      query["themeCategory.name"] = { $regex: new RegExp(propertyType, "i") };
+    if (themeId) query.themeCategoryId = themeId;
 
     if (priceMin || priceMax) {
       query["pricing.discountPrice"] = {};
@@ -821,11 +748,26 @@ export const cafeThemes = async (req, res) => {
       { $match: { status: "active" } },
       {
         $group: {
-          _id: "$themeCategory.name",
-          image: { $first: "$themeCategory.image" },
+          _id: "$themeCategoryId",
         },
       },
-      { $project: { _id: 0, name: "$_id", image: 1 } },
+      {
+        $lookup: {
+          from: "themecategories",
+          localField: "_id",
+          foreignField: "_id",
+          as: "themeDetails"
+        }
+      },
+      { $unwind: "$themeDetails" },
+      {
+        $project: {
+          _id: 0,
+          id: "$themeDetails._id",
+          name: "$themeDetails.name",
+          image: "$themeDetails.image"
+        }
+      },
       { $sort: { name: 1 } },
     ]);
 
@@ -847,18 +789,16 @@ export const getCafesByTheme = async (req, res) => {
   try {
     const { theme } = req.query;
 
-    if (!theme) {
-      return res.status(400).json({
-        success: false,
-        message: "Theme name is required",
-      });
+    if (!theme || !mongoose.Types.ObjectId.isValid(theme)) {
+      return res.status(400).json({ success: false, message: "Valid Theme ID is required" });
     }
 
     const cafes = await cafeModel.find({
-      "themeCategory.name": theme,
+      themeCategoryId: theme,
       status: "active",
     })
       .select("-__v")
+      .populate("themeCategoryId", "name image")
       .populate("createdBy", "name email");
 
     return res.status(200).json({

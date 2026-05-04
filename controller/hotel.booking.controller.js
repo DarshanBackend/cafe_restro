@@ -10,12 +10,14 @@ import WalletTransactionModel from "../model/wallet.transaction.model.js";
 
 export const createBooking = async (req, res) => {
   try {
+    if (!process.env.STRIPE_SECRET) {
+      return res.status(500).json({ success: false, message: "Stripe API key is missing in environment variables" });
+    }
     const stripe = new Stripe(process.env.STRIPE_SECRET);
     const userId = req.user?._id;
     const { hotelId } = req.params;
 
     const {
-      roomId,
       checkInDate,
       checkOutDate,
       adults = 1,
@@ -23,9 +25,6 @@ export const createBooking = async (req, res) => {
       name,
       email,
       phone,
-      address,
-      state,
-      country,
       coupanCode,
       children = 0,
       infants = 0,
@@ -39,8 +38,7 @@ export const createBooking = async (req, res) => {
     const hotel = await hotelModel.findById(hotelId);
     if (!hotel) return res.status(404).json({ success: false, message: "Hotel not found" });
 
-    const room = hotel.rooms.id(roomId);
-    if (!room) return res.status(404).json({ success: false, message: "Room not found" });
+    // No roomId needed anymore
 
     const parseDate = (d) => {
       const [day, month, year] = d.split("-");
@@ -55,7 +53,7 @@ export const createBooking = async (req, res) => {
       Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24))
     );
 
-    const roomRatePerNight = room.discountPrice; // Using the offered discount price as base
+    const roomRatePerNight = hotel.discountPrice; // Using the hotel's discount price as base
     const totalRoomRate = roomRatePerNight * numberOfNights * numberOfRooms;
 
     // Fixed mandatory 10% discount logic on top of the offered price
@@ -64,29 +62,72 @@ export const createBooking = async (req, res) => {
     const discountAmount = (actualPrice * discountPercentage) / 100;
     const discountPrice = actualPrice - discountAmount;
 
+    // 🎟️ Coupon Logic
+    let couponDetails = null;
+    let amountAfterCoupon = discountPrice;
+
+    if (coupanCode) {
+      const coupon = await coupanModel.findOne({ couponCode: coupanCode.toUpperCase(), isActive: true });
+      if (coupon) {
+        // Check expiry
+        if (!coupon.couponExpire || new Date(coupon.couponExpire) >= new Date()) {
+          const couponDiscountPercent = coupon.couponPerc || 0;
+          const couponDiscountAmount = (discountPrice * couponDiscountPercent) / 100;
+          amountAfterCoupon = discountPrice - couponDiscountAmount;
+
+          couponDetails = {
+            code: coupon.couponCode,
+            discountPercent: couponDiscountPercent,
+            discountAmount: couponDiscountAmount,
+          };
+        }
+      }
+    }
+
     // Tax and Service Fee combined (18% + 5% = 23%)
     const taxesAndFeesPercentage = 23;
-    const taxesAndFeesAmount = (discountPrice * taxesAndFeesPercentage) / 100;
-    const totalAmount = discountPrice + taxesAndFeesAmount;
+    const taxesAndFeesAmount = (amountAfterCoupon * taxesAndFeesPercentage) / 100;
+    const totalAmount = amountAfterCoupon + taxesAndFeesAmount;
     let user = {};
 
-    if (isMySelf) {
-      const dbUser = await userModel.findById(userId);
-      user = {
-        name: dbUser.name,
-        email: dbUser.email,
-        phone: dbUser.contactNo,
-        address: dbUser.address,
-        state: dbUser.state,
-        country: dbUser.nationality,
-      };
+    const normalizedPaymentMethod = paymentMethod ? paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1).toLowerCase() : "Stripe";
+
+    let dbUser = null;
+    if (isMySelf || normalizedPaymentMethod === "Wallet") {
+      dbUser = await userModel.findById(userId);
+      if (!dbUser) return res.status(404).json({ success: false, message: "User not found" });
+
+      if (isMySelf) {
+        // Find default address from the addresses array
+        const defaultAddr = dbUser.addresses?.find(a => a.isDefault) || dbUser.addresses?.[0];
+
+        user = {
+          name: defaultAddr?.name || dbUser.name,
+          email: defaultAddr?.email || dbUser.email,
+          phone: defaultAddr?.contactNo || dbUser.contactNo,
+          address: defaultAddr?.address || dbUser.address,
+          state: defaultAddr?.state || dbUser.state,
+          country: defaultAddr?.country || dbUser.nationality || dbUser.country,
+        };
+      }
     }
+
+    // 💰 WALLET BALANCE CHECK (BEFORE SAVING BOOKING)
+    if (normalizedPaymentMethod === "Wallet") {
+      const finalTotal = totalAmount;
+      if ((dbUser.walletBalance || 0) < finalTotal) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient wallet balance. Your balance is ₹${dbUser.walletBalance || 0}, but the booking total is ₹${finalTotal.toFixed(2)}.`
+        });
+      }
+    }
+
 
 
     const booking = new hotelBookingModel({
       userId,
       hotelId,
-      roomId,
       adminId: hotel.adminId,
       numberOfRooms,
       bookingDates: {
@@ -98,10 +139,10 @@ export const createBooking = async (req, res) => {
         isMySelf,
         name: isMySelf ? user.name : name,
         email: isMySelf ? user.email : email,
-        phone: isMySelf ? user.contactNo : phone,
-        address: isMySelf ? user.address : address,
-        state: isMySelf ? user.state : state,
-        country: isMySelf ? user.nationality : country,
+        phone: isMySelf ? user.phone : phone,
+        address: isMySelf ? user.address : "",
+        state: isMySelf ? user.state : "",
+        country: isMySelf ? user.country : "",
       },
       guestInfo: {
         adults,
@@ -116,15 +157,18 @@ export const createBooking = async (req, res) => {
         discountPercentage,
         discountAmount,
         discountPrice,
+        couponDiscountAmount: couponDetails ? couponDetails.discountAmount : 0,
+        priceAfterCoupon: amountAfterCoupon,
         taxesAndFeesPercentage,
         taxesAndFeesAmount,
         totalAmount,
         currency: "INR",
+        couponCode: couponDetails ? couponDetails.code : null,
       },
       payment: {
-        transactionId,
-        paymentStatus,
-        paymentMethod: "Razorpay",
+        transactionId: transactionId || "",
+        paymentStatus: paymentStatus || "pending",
+        paymentMethod: normalizedPaymentMethod,
         paymentDate: new Date(),
       },
     });
@@ -140,22 +184,16 @@ export const createBooking = async (req, res) => {
       userId,
     }).catch((err) => console.error("Notification Error:", err.message));
 
-    if (paymentMethod === "Wallet") {
-      const dbUser = await userModel.findById(userId);
-      if (!dbUser) return res.status(404).json({ success: false, message: "User not found" });
-
-      if ((dbUser.walletBalance || 0) < totalAmount) {
-        return res.status(400).json({ success: false, message: "Insufficient wallet balance" });
-      }
-
+    if (normalizedPaymentMethod === "Wallet") {
+      const finalTotal = totalAmount;
       // Deduct from wallet
-      dbUser.walletBalance -= totalAmount;
+      dbUser.walletBalance -= finalTotal;
       await dbUser.save();
 
       // Create Wallet Transaction
       const wTxn = new WalletTransactionModel({
         userId,
-        amount: totalAmount,
+        amount: finalTotal,
         type: "debit",
         description: `Hotel Booking - ${hotel.name}`,
         status: "completed"
@@ -171,7 +209,8 @@ export const createBooking = async (req, res) => {
       return res.status(201).json({
         success: true,
         message: "Booking confirmed successfully via Wallet",
-        result: savedBooking,
+        result: [savedBooking],
+        length: 1
       });
     }
 
@@ -184,7 +223,7 @@ export const createBooking = async (req, res) => {
             currency: "inr",
             product_data: {
               name: `Hotel Booking - ${hotel.name}`,
-              description: `Room: ${room.type} | ${numberOfNights} Nights`,
+              description: `Booking for ${numberOfRooms} Rooms | ${numberOfNights} Nights`,
               images: hotel.images && hotel.images.length > 0 ? [hotel.images[0]] : [],
             },
             unit_amount: Math.round(totalAmount * 100), // Stripe expects amount in paise (cents)
@@ -225,15 +264,15 @@ export const previewHotelBooking = async (req, res) => {
   try {
     const { hotelId } = req.params;
     const {
-      roomId,
       checkInDate,
       checkOutDate,
       couponCode,
       numberOfRooms = 1,
       adults = 1,
+      children = 0,
     } = req.body;
 
-    if (!hotelId || !roomId || !checkInDate || !checkOutDate) {
+    if (!hotelId || !checkInDate || !checkOutDate) {
       return res.status(400).json({ success: false, message: "Missing required booking details" });
     }
 
@@ -256,14 +295,13 @@ export const previewHotelBooking = async (req, res) => {
     const hotel = await hotelModel.findById(hotelId);
     if (!hotel) return res.status(404).json({ success: false, message: "Hotel not found" });
 
-    const room = hotel.rooms.id(roomId);
-    if (!room) return res.status(404).json({ success: false, message: "Room not found" });
+    // No roomId needed anymore
 
     const numberOfNights = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
 
     const TAXES_AND_FEES_PERCENT = 23;
 
-    const roomRatePerNight = room.discountPrice;
+    const roomRatePerNight = hotel.discountPrice;
     const totalRoomRate = roomRatePerNight * numberOfNights * numberOfRooms;
 
     const actualPrice = totalRoomRate;
@@ -271,53 +309,98 @@ export const previewHotelBooking = async (req, res) => {
     const discountAmount = (actualPrice * discountPercent) / 100;
     const discountPrice = actualPrice - discountAmount;
     let couponDetails = null;
+    let amountAfterCoupon = discountPrice;
 
     if (couponCode) {
-      couponDetails = {
-        code: couponCode,
-        discountPercent,
-        description: "10% Discount Applied",
-      };
+      const coupon = await coupanModel.findOne({ couponCode: couponCode.toUpperCase(), isActive: true });
+      if (coupon) {
+        // Check expiry
+        if (!coupon.couponExpire || new Date(coupon.couponExpire) >= new Date()) {
+          const couponDiscountPercent = coupon.couponPerc || 0;
+          const couponDiscountAmount = (discountPrice * couponDiscountPercent) / 100;
+          amountAfterCoupon = discountPrice - couponDiscountAmount;
+
+          couponDetails = {
+            code: coupon.couponCode,
+            discountPercent: couponDiscountPercent,
+            discountAmount: couponDiscountAmount,
+            description: `Additional ${couponDiscountPercent}% Coupon Discount Applied`,
+          };
+        }
+      }
     }
 
-    const taxesAndFeesAmount = (discountPrice * TAXES_AND_FEES_PERCENT) / 100;
-    const totalAmount = discountPrice + taxesAndFeesAmount;
+    const taxesAndFeesAmount = (amountAfterCoupon * TAXES_AND_FEES_PERCENT) / 100;
+    const totalAmount = amountAfterCoupon + taxesAndFeesAmount;
+
+    // Rounding helper
+    const round = (num) => Math.round(num * 100) / 100;
 
     return res.status(200).json({
       success: true,
       message: "Booking preview generated successfully",
-      result: {
-        hotel: {
-          id: hotel._id,
-          name: hotel.name,
-          city: hotel.address?.city,
-        },
-        room: {
-          id: room._id,
-          type: room.type,
-          pricePerNight: roomRatePerNight,
-          maxGuests: room.maxGuests,
-          images: room.images || [],
-        },
-        booking: {
-          checkInDate,
-          checkOutDate,
-          numberOfNights,
-          numberOfRooms,
-          adults,
-        },
-        costBreakdown: {
-          actualPrice,
-          discountPercent,
-          discountAmount,
-          discountPrice,
-          taxesAndFeesPercent: TAXES_AND_FEES_PERCENT,
-          taxesAndFeesAmount,
-          totalAmount: Number(totalAmount.toFixed(2)),
-          currency: "INR",
-        },
-        coupon: couponDetails,
-      },
+      result: [
+        {
+          hotelDetails: {
+            id: hotel._id,
+            name: hotel.name,
+            city: hotel.city,
+            location: hotel.location,
+            starRating: hotel.starRating || 0,
+            image: hotel.images?.[0] || null,
+            amenities: hotel.amenities || [],
+          },
+          bookingDetails: {
+            checkInDate: checkInDate,
+            checkOutDate: checkOutDate,
+            numberOfNights: numberOfNights,
+            numberOfRooms: numberOfRooms,
+            adults: adults,
+            children: children || 0,
+          },
+          paymentSummary: {
+            title: "Payment Information",
+            items: [
+              {
+                label: `${numberOfRooms} Room * ${numberOfNights} Night`,
+                value: round(totalRoomRate).toFixed(2),
+                prefix: "₹"
+              },
+              {
+                label: "Mandatory Discount (10%)",
+                value: `-₹${round(discountAmount).toFixed(2)}`,
+                type: "discount"
+              },
+              {
+                label: "Price After Mandatory Discount",
+                value: round(discountPrice).toFixed(2),
+                prefix: "₹"
+              },
+              couponDetails ? {
+                label: `Promo Code (${couponDetails.code})`,
+                value: `-₹${round(couponDetails.discountAmount).toFixed(2)}`,
+                type: "discount"
+              } : null,
+              {
+                label: "Taxes (18%) & Services (5%)",
+                value: round(taxesAndFeesAmount).toFixed(2),
+                prefix: "₹"
+              },
+              {
+                label: "Total Amount of Paid",
+                value: round(totalAmount).toFixed(2),
+                prefix: "₹",
+                bold: true
+              }
+            ].filter(Boolean),
+            totalAmount: round(totalAmount),
+            currency: "INR",
+            coupon: couponDetails || null,
+            proceedAction: "Process To Paid"
+          }
+        }
+      ],
+      length: 1
     });
   } catch (error) {
     console.error("previewHotelBooking Error:", error);
@@ -333,13 +416,23 @@ export const previewHotelBooking = async (req, res) => {
 export const getMyHotelBookings = async (req, res) => {
   try {
     const guestId = req.user?._id;
-    console.log(guestId)
     const bookings = await hotelBookingModel
       .find({ userId: guestId })
-      .populate("hotelId", "name address location")
-      .populate("roomId")
+      .populate("hotelId", "name address location images")
       .populate("userId")
       .sort({ createdAt: -1 });
+
+    const now = new Date();
+    for (let booking of bookings) {
+      // If check-out date is in the past and booking is not already cancelled/completed
+      if (
+        ["confirmed", "upcoming", "pending"].includes(booking.bookingStatus.toLowerCase()) &&
+        new Date(booking.bookingDates.checkOutDate) < now
+      ) {
+        booking.bookingStatus = "completed";
+        await booking.save();
+      }
+    }
 
     return sendSuccess(res, `Booking fetching successfull`, bookings);
 
@@ -357,7 +450,22 @@ export const hotelAdminBookings = async (req, res) => {
       return sendError(res, 400, "Admin ID not found");
     }
 
-    const hotelBookings = await hotelBookingModel.find({ adminId });
+    const hotelBookings = await hotelBookingModel
+      .find({ adminId })
+      .populate("hotelId", "name address location images")
+      .populate("userId", "name email contactNo")
+      .sort({ createdAt: -1 });
+
+    const now = new Date();
+    for (let booking of hotelBookings) {
+      if (
+        ["confirmed", "upcoming", "pending"].includes(booking.bookingStatus.toLowerCase()) &&
+        new Date(booking.bookingDates.checkOutDate) < now
+      ) {
+        booking.bookingStatus = "completed";
+        await booking.save();
+      }
+    }
 
     return sendSuccess(res, "Bookings fetched successfully", hotelBookings);
   } catch (error) {
@@ -369,57 +477,188 @@ export const hotelAdminBookings = async (req, res) => {
 
 export const updateHotelPaymentStatus = async (req, res) => {
   try {
+    const adminId = req.admin?._id;
+    if (!adminId) return sendError(res, 400, "Admin ID not found");
+
     const { status } = req.body;
     const { bookingId } = req.params;
 
     const validStatuses = ["pending", "confirmed", "cancelled", "completed", "refunded", "failed"];
 
-    if (!validStatuses.includes(status)) {
+    if (!validStatuses.includes(status.toLowerCase())) {
       return sendError(res, 400, "Invalid status value");
     }
 
-
-    const booking = await hotelBookingModel.findOneAndUpdate(
-      { _id: bookingId },
-      { "payment.paymentStatus": status },
-      { new: true }
-    );
+    const booking = await hotelBookingModel.findOne({ _id: bookingId, adminId });
     if (!booking) {
-      return sendError(res, 404, "Booking not found");
+      return sendError(res, 404, "Booking not found or not authorized");
     }
-    return sendSuccess(res, "Booking status updated successfully", booking);
+
+    const previousPaymentStatus = booking.payment.paymentStatus.toLowerCase();
+    const newPaymentStatus = status.toLowerCase();
+
+    // If changing to cancelled and it was previously paid, process refund
+    if (newPaymentStatus === "cancelled" && (previousPaymentStatus === "completed" || previousPaymentStatus === "confirmed")) {
+      const amountToRefund = booking.pricing.totalAmount;
+      const user = await userModel.findById(booking.userId);
+
+      if (user) {
+        user.walletBalance = (user.walletBalance || 0) + amountToRefund;
+        await user.save();
+
+        // Record wallet transaction
+        const wTxn = new WalletTransactionModel({
+          userId: user._id,
+          amount: amountToRefund,
+          type: "credit",
+          description: `Refund for Hotel Booking (Payment Cancelled by Admin) - ${booking.bookingId || booking._id}`,
+          status: "completed"
+        });
+        await wTxn.save();
+
+        booking.payment.paymentStatus = "refunded";
+        booking.bookingStatus = "cancelled";
+      } else {
+        booking.payment.paymentStatus = newPaymentStatus;
+        booking.bookingStatus = "cancelled";
+      }
+    } else {
+      booking.payment.paymentStatus = newPaymentStatus;
+
+      // If payment is completed or confirmed, also mark the booking as confirmed
+      if (newPaymentStatus === "completed" || newPaymentStatus === "confirmed") {
+        booking.bookingStatus = "confirmed";
+        booking.payment.paymentDate = new Date();
+      } else if (newPaymentStatus === "cancelled" || newPaymentStatus === "failed") {
+        booking.bookingStatus = "cancelled";
+      }
+    }
+
+    await booking.save();
+    return sendSuccess(res, "Booking payment status updated successfully", [booking]);
 
   } catch (error) {
     log.error(error.message);
-    return sendError(res, 500, "Failed to update booking status", error);
+    return sendError(res, 500, "Failed to update booking status", error.message);
   }
 }
 
 export const updateHotelBookingStatus = async (req, res) => {
   try {
-    const adminId = req.admin._id;
+    const adminId = req.admin?._id;
+    if (!adminId) return sendError(res, 400, "Admin ID not found");
+
     const { id } = req.params;
-    const { status } = req.query;
-    console.log("dbeqyhvdb")
-    const validStatuses = ["pending", "upcoming", "completed", "cancelled", "refunded"];
+    const { status } = req.body;
+
+    if (!status) return sendError(res, 400, "Status is required in request body");
+
+    const validStatuses = ["pending", "upcoming", "completed", "cancelled", "refunded", "confirmed"];
 
     if (!validStatuses.includes(status.toLowerCase())) {
       return sendError(res, 400, "Invalid booking status");
     }
+
     // Find booking
     const booking = await hotelBookingModel.findOne({ _id: id, adminId });
     if (!booking) {
       return sendError(res, 404, "Booking not found or not authorized");
     }
 
+    const previousStatus = booking.bookingStatus.toLowerCase();
+    const newStatus = status.toLowerCase();
+
+    // If changing to cancelled and it was confirmed/paid, process refund
+    if (newStatus === "cancelled" && previousStatus !== "cancelled") {
+      const isPaid = booking.payment.paymentStatus === "completed" || booking.payment.paymentStatus === "confirmed";
+
+      if (isPaid) {
+        const amountToRefund = booking.pricing.totalAmount;
+        const user = await userModel.findById(booking.userId);
+
+        if (user) {
+          user.walletBalance = (user.walletBalance || 0) + amountToRefund;
+          await user.save();
+
+          // Record wallet transaction
+          const wTxn = new WalletTransactionModel({
+            userId: user._id,
+            amount: amountToRefund,
+            type: "credit",
+            description: `Refund for Hotel Booking (Cancelled by Admin) - ${booking.bookingId || booking._id}`,
+            status: "completed"
+          });
+          await wTxn.save();
+
+          booking.payment.paymentStatus = "refunded";
+        }
+      }
+    }
+
     // Update and save
-    booking.bookingStatus = status.toLowerCase();
+    booking.bookingStatus = newStatus;
     await booking.save();
 
-
-    return sendSuccess(res, "Booking status updated successfully", booking);
+    return sendSuccess(res, `Booking status updated to ${newStatus} successfully`, booking);
   } catch (error) {
     log.error(error.message);
     return sendError(res, 500, "Failed to update booking status", error.message);
+  }
+};
+
+export const cancelHotelBooking = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { bookingId } = req.params;
+
+    const booking = await hotelBookingModel.findOne({ _id: bookingId, userId });
+    if (!booking) {
+      return sendError(res, 404, "Booking not found or not authorized");
+    }
+
+    if (["cancelled", "refunded"].includes(booking.bookingStatus.toLowerCase())) {
+      return sendError(res, 400, "Booking is already cancelled or refunded");
+    }
+
+    const isPaid = booking.payment.paymentStatus === "completed" || booking.payment.paymentStatus === "confirmed";
+    const amountToRefund = booking.pricing.totalAmount;
+
+    // Update booking status
+    booking.bookingStatus = "cancelled";
+
+    if (isPaid) {
+      booking.payment.paymentStatus = "refunded";
+
+      // Credit amount back to user's wallet
+      const user = await userModel.findById(userId);
+      if (user) {
+        user.walletBalance = (user.walletBalance || 0) + amountToRefund;
+        await user.save();
+
+        // Record wallet transaction
+        const wTxn = new WalletTransactionModel({
+          userId,
+          amount: amountToRefund,
+          type: "credit",
+          description: `Refund for Hotel Booking (Cancelled by User) - ${booking.bookingId || booking._id}`,
+          status: "completed"
+        });
+        await wTxn.save();
+      }
+    } else {
+      booking.payment.paymentStatus = "cancelled";
+    }
+
+    await booking.save();
+
+    return sendSuccess(res, isPaid ? "Booking cancelled and refund processed to wallet successfully" : "Booking cancelled successfully", {
+      bookingId: booking._id,
+      refundAmount: isPaid ? amountToRefund : 0,
+      paymentStatus: booking.payment.paymentStatus
+    });
+
+  } catch (error) {
+    log.error(error.message);
+    return sendError(res, 500, "Failed to cancel booking", error.message);
   }
 };

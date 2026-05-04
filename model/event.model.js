@@ -18,14 +18,37 @@ const eventSchema = new mongoose.Schema({
     required: true
   },
   typesOfEvent: {
-    type: [String], // Array of strings
-    default: [] // Default empty array instead of null
+    type: [String],
+    default: []
+  },
+  sectionType: {
+    type: String,
+    enum: ['Featured', 'Regular'],
+    default: 'Regular'
+  },
+  categoryTitle: {
+    type: String
+  },
+  serviceType: {
+    type: String
   },
   contactNo: {
     type: String
   },
   whatsappNo: {
     type: String
+  },
+  rating: {
+    type: Number,
+    default: 0
+  },
+  experienceYears: {
+    type: Number,
+    default: 5
+  },
+  totalFollowers: {
+    type: String,
+    default: "50k+"
   }
 }, {
   timestamps: true // Adds createdAt and updatedAt automatically

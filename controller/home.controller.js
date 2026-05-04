@@ -84,10 +84,10 @@ export const WhatsNew = async (req, res) => {
 export const getTrendingDestinations = async (req, res) => {
   try {
     const { limit = 8 } = req.query;
-    
+
     // Get trending INDIAN cities based on actual bookings
     const trendingCities = await getIndianTrendingCities(parseInt(limit));
-    
+
     // Enhance with images from Unsplash
     const destinationsWithImages = await Promise.all(
       trendingCities.map(async (city) => ({
@@ -101,7 +101,7 @@ export const getTrendingDestinations = async (req, res) => {
       message: "Trending destinations fetched successfully",
       data: destinationsWithImages
     });
-    
+
   } catch (error) {
     console.error("Trending destinations error:", error);
     res.status(500).json({
@@ -158,9 +158,9 @@ const getIndianTrendingCities = async (limit = 8) => {
         }
       },
       {
-        $sort: { 
+        $sort: {
           bookingCount: -1,
-          totalRevenue: -1 
+          totalRevenue: -1
         }
       },
       {
@@ -194,9 +194,9 @@ const getIndianTrendingCities = async (limit = 8) => {
         }
       },
       {
-        $sort: { 
+        $sort: {
           hotelCount: -1,
-          avgRating: -1 
+          avgRating: -1
         }
       },
       {
@@ -253,7 +253,7 @@ const getIndianTrendingCities = async (limit = 8) => {
 const formatIndianCityData = (data, source) => {
   const cityName = data._id.city;
   const stateName = data._id.state || getIndianStateFromCity(cityName);
-  
+
   return {
     id: `${cityName.toLowerCase().replace(/\s+/g, '-')}-${stateName.toLowerCase().replace(/\s+/g, '-')}`,
     name: cityName,
@@ -319,7 +319,7 @@ const getIndianCityImageFromUnsplash = async (cityName, stateName) => {
 
     // Search specifically for Indian cities
     const query = `${cityName} ${stateName} India city landscape tourism`;
-    
+
     const response = await axios.get('https://api.unsplash.com/search/photos', {
       params: {
         query: query,
@@ -345,7 +345,7 @@ const getIndianCityImageFromUnsplash = async (cityName, stateName) => {
       timeout: 5000
     });
 
-    return fallbackResponse.data.results.length > 0 
+    return fallbackResponse.data.results.length > 0
       ? fallbackResponse.data.results[0].urls.regular
       : getDefaultIndianCityImage(cityName);
 
@@ -425,19 +425,19 @@ export const getCoffeeDates = async (req, res) => {
       .limit(limit);
 
     const data = cafes.map(c => {
-       const obj = c.toObject();
-       let image = null;
-       if (obj.images && obj.images.length > 0) {
-         image = obj.images[0];
-       }
-       return {
-         id: obj._id,
-         name: obj.name,
-         image: image,
-         rating: obj.averageRating || 0,
-         location: obj.location?.city || "",
-         type: "cafe"
-       };
+      const obj = c.toObject();
+      let image = null;
+      if (obj.images && obj.images.length > 0) {
+        image = obj.images[0];
+      }
+      return {
+        id: obj._id,
+        name: obj.name,
+        image: image,
+        rating: obj.averageRating || 0,
+        location: obj.location?.city || "",
+        type: "cafe"
+      };
     });
 
     res.json({
@@ -505,9 +505,9 @@ export const getBrowseByPropertyTypes = async (req, res) => {
 // GET /api/special-offers
 export const getSpecialOffers = async (req, res) => {
   try {
-    const topOffer = await offerModel.findOne({ 
-        isActive: true 
-      })
+    const topOffer = await offerModel.findOne({
+      isActive: true
+    })
       .sort({ createdAt: -1 });
 
     let discountText = "50% OFF";
@@ -545,7 +545,7 @@ export const getSpecialOffers = async (req, res) => {
 export const getLuxuryStays = async (req, res) => {
   try {
     const { city, limit = 4 } = req.query;
-    
+
     // Build query
     let query = {};
     if (city) {
@@ -556,17 +556,17 @@ export const getLuxuryStays = async (req, res) => {
     const luxuryHotels = await hotelModel.find(query)
       .sort({ averageRating: -1 }) // Assuming luxury means highly rated or we could sort by price
       .limit(parseInt(limit));
-      
+
     const formatHotel = (hotel) => {
-       const obj = hotel.toObject();
-       return {
-         id: obj._id,
-         name: obj.name,
-         location: obj.address?.city || city || "Unknown",
-         image: obj.images && obj.images.length > 0 ? obj.images[0] : "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
-         rating: obj.averageRating || 5,
-         price: obj.priceRange?.min || obj.Rent || 0
-       };
+      const obj = hotel.toObject();
+      return {
+        id: obj._id,
+        name: obj.name,
+        location: obj.address?.city || city || "Unknown",
+        image: obj.images && obj.images.length > 0 ? obj.images[0] : "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
+        rating: obj.averageRating || 5,
+        price: obj.priceRange?.min || obj.Rent || 0
+      };
     };
 
     let data = luxuryHotels.map(formatHotel);
@@ -576,7 +576,7 @@ export const getLuxuryStays = async (req, res) => {
       const fallbackHotels = await hotelModel.find({})
         .sort({ averageRating: -1 })
         .limit(parseInt(limit));
-        
+
       data = fallbackHotels.map(formatHotel);
     }
 

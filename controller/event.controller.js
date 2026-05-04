@@ -3,7 +3,7 @@ import { deleteFromS3, uploadToS3 } from "../middleware/uploadS3.js";
 import eventModel from "../model/event.model.js";
 import adminModel from "../model/admin.model.js";
 import log from "../utils/logger.js";
-import { sendError, sendSuccess } from "../utils/responseUtils.js";
+import { sendError, sendSuccess, sendBadRequest } from "../utils/responseUtils.js";
 
 // Create a new event
 export const addNewEvent = async (req, res) => {
@@ -11,10 +11,13 @@ export const addNewEvent = async (req, res) => {
     const adminId = req.admin._id;
     const {
       eventName,
+      categoryTitle,
+      serviceType,
       addresss,
       typesOfEvent,
       contactNo,
-      whatsappNo
+      whatsappNo,
+      sectionType
     } = req.body;
 
     // Validate required fields
@@ -67,15 +70,17 @@ export const addNewEvent = async (req, res) => {
       }
     }
 
-    // Create new event
     const newEvent = new eventModel({
       eventImage: eventImageUrl,
       eventName,
+      categoryTitle,
+      serviceType,
       adminId: adminId,
       addresss,
-      typesOfEvent: eventTypesArray, // Now using array
+      typesOfEvent: eventTypesArray,
       contactNo,
-      whatsappNo
+      whatsappNo,
+      sectionType: sectionType || 'Regular'
     });
 
     const savedEvent = await newEvent.save();
@@ -98,7 +103,6 @@ export const addNewEvent = async (req, res) => {
 };
 
 
-// Get all events with advanced filtering
 export const getAllEvents = async (req, res) => {
   try {
     const {
@@ -107,15 +111,11 @@ export const getAllEvents = async (req, res) => {
       sortBy = "createdAt",
       sortOrder = "desc",
       search,
-      typesOfEvent,
-      startDate,
-      endDate
+      typesOfEvent
     } = req.query;
 
-    // Build filter object
-    const filter = {};
+    const filter = { sectionType: 'Regular' };
 
-    // Search filter (case-insensitive search on eventName and addresss)
     if (search) {
       filter.$or = [
         { eventName: { $regex: search, $options: "i" } },
@@ -123,54 +123,86 @@ export const getAllEvents = async (req, res) => {
       ];
     }
 
-    // Type filter
     if (typesOfEvent) {
-      filter.typesOfEvent = typesOfEvent;
+      const types = typeof typesOfEvent === 'string'
+        ? typesOfEvent.split(',').map(t => t.trim())
+        : typesOfEvent;
+      filter.typesOfEvent = { $in: types };
     }
 
-    // Date range filter
-    if (startDate || endDate) {
-      filter.createdAt = {};
-      if (startDate) filter.createdAt.$gte = new Date(startDate);
-      if (endDate) filter.createdAt.$lte = new Date(endDate);
-    }
+    const sort = { [sortBy]: sortOrder === "asc" ? 1 : -1 };
+    const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // Pagination options
-    const options = {
-      page: parseInt(page),
-      limit: parseInt(limit),
-      sort: { [sortBy]: sortOrder === "desc" ? -1 : 1 },
-      collation: { locale: "en", strength: 2 } // Case-insensitive sorting
-    };
+    const [allEvents, totalCount] = await Promise.all([
+      eventModel.find(filter)
+        .select("-rating -experienceYears -totalFollowers")
+        .sort(sort)
+        .skip(skip)
+        .limit(parseInt(limit)),
+      eventModel.countDocuments(filter)
+    ]);
 
-    // Execute query with pagination
-    const events = await eventModel.find(filter)
-      .sort(options.sort)
-      .limit(options.limit * 1)
-      .skip((options.page - 1) * options.limit)
-      .exec();
-
-    // Get total count for pagination info
-    const totalCount = await eventModel.countDocuments(filter);
-
-    const response = {
-      events,
-      pagination: {
-        currentPage: options.page,
-        totalPages: Math.ceil(totalCount / options.limit),
-        totalEvents: totalCount,
-        hasNext: options.page < Math.ceil(totalCount / options.limit),
-        hasPrev: options.page > 1
-      }
-    };
-
-    log.info(`Retrieved ${events.length} events`);
-    return sendSuccess(res, "Events retrieved successfully", response);
+    return sendSuccess(res, "Events retrieved successfully", allEvents);
   } catch (error) {
     log.error(`Error While Getting Events: ${error.message}`);
     return sendError(res, "Error While Getting Events", error);
   }
 };
+
+export const searchEvents = async (req, res) => {
+  try {
+    const { q } = req.query;
+
+    if (!q || q.trim() === '') return sendBadRequest(res, "Search query 'q' is required");
+
+    const events = await eventModel.find({
+      $or: [
+        { eventName: { $regex: q.trim(), $options: "i" } },
+        { addresss: { $regex: q.trim(), $options: "i" } }
+      ]
+    })
+    return sendSuccess(res, "Search results retrieved successfully", events);
+  } catch (error) {
+    log.error(`Error While Searching Events: ${error.message}`);
+    return sendError(res, "Error While Searching Events", error);
+  }
+};
+
+export const filterEvents = async (req, res) => {
+  try {
+    const {
+      typesOfEvent,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+      page = 1,
+      limit = 10
+    } = req.query;
+
+    const filter = { sectionType: 'Regular' };
+
+    if (typesOfEvent) {
+      const types = typeof typesOfEvent === 'string'
+        ? typesOfEvent.split(',').map(t => t.trim())
+        : typesOfEvent;
+      filter.typesOfEvent = { $in: types };
+    }
+
+    const sort = { [sortBy]: sortOrder === "asc" ? 1 : -1 };
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const events = await eventModel.find(filter)
+      .select("-rating -experienceYears -totalFollowers")
+      .sort(sort)
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    return sendSuccess(res, "Filtered events retrieved successfully", events);
+  } catch (error) {
+    log.error(`Error While Filtering Events: ${error.message}`);
+    return sendError(res, "Error While Filtering Events", error);
+  }
+};
+
 
 // Get single event by ID
 export const getEventById = async (req, res) => {
@@ -206,6 +238,9 @@ export const updateEvent = async (req, res) => {
       return sendError(res, "Invalid event ID", 400);
     }
 
+    const adminId = req.admin?._id;
+    if (!adminId) return sendError(res, "Admin ID not found", 400);
+
     // ✅ Normalize both to ObjectId
     const eventObjectId = new mongoose.Types.ObjectId(id);
     const adminObjectId = new mongoose.Types.ObjectId(adminId);
@@ -221,21 +256,19 @@ export const updateEvent = async (req, res) => {
       return sendError(res, "Event not found or unauthorized", 404);
     }
 
-    // ✅ Normalize `typesOfEvent` to array
-    if (updateData.typesOfEvent) {
-      if (typeof updateData.typesOfEvent === "string") {
-        updateData.typesOfEvent = updateData.typesOfEvent
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean);
-      } else if (!Array.isArray(updateData.typesOfEvent)) {
-        return sendError(res, "typesOfEvent must be a string or array", 400);
-      }
+    // ✅ Normalize typesOfEvent
+    if (updateData.typesOfEvent && typeof updateData.typesOfEvent === "string") {
+      updateData.typesOfEvent = updateData.typesOfEvent.split(",").map(t => t.trim()).filter(Boolean);
+    }
+
+    // ✅ Normalize ourService
+    if (updateData.ourService && typeof updateData.ourService === "string") {
+      updateData.ourService = JSON.parse(updateData.ourService);
     }
 
     // ✅ Handle event image upload
-    if (req.files?.eventImage?.length > 0) {
-      const eventImageFile = req.files.eventImage[0];
+    if (req.files && (req.files.eventImage || req.files.image)) {
+      const eventImageFile = (req.files.eventImage || req.files.image)[0];
 
       const allowedMimeTypes = [
         "image/jpeg",

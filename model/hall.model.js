@@ -47,16 +47,9 @@ const hallSchema = new mongoose.Schema({
     type: String,
     trim: true
   }],
-  // FIXED: Proper images structure
-  images: {
-    featuredImage: {
-      type: String,
-      default: null
-    },
-    galleryImages: [{
-      type: String,
-      default: []
-    }]
+  image: {
+    type: String,
+    default: null
   },
   // FIXED: Use adminId (not adminid)
   adminId: {
@@ -77,6 +70,11 @@ const hallSchema = new mongoose.Schema({
   isAvailable: {
     type: Boolean,
     default: true
+  },
+  ourService: {
+    connectVieCall: { type: String, default: null },
+    connectVieMessage: { type: String, default: null },
+    helpSupport: { type: String, default: null }
   }
 }, {
   timestamps: true

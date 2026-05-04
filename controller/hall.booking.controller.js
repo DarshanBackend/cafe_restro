@@ -1,8 +1,10 @@
 import hallModel from "../model/hall.model.js";
 import hallBookingModel from "../model/hall.booking.model.js";
 import mongoose from "mongoose";
-import { sendBadRequest } from "../utils/responseUtils.js";
-
+import { sendBadRequest, sendNotFound, sendSuccess, sendError } from "../utils/responseUtils.js";
+import userModel from "../model/user.model.js";
+import WalletTransactionModel from "../model/wallet.transaction.model.js";
+import { v4 as uuidv4 } from "uuid";
 
 export const createHallBooking = async (req, res) => {
   try {
@@ -12,20 +14,31 @@ export const createHallBooking = async (req, res) => {
       endDate,
       startTime,
       endTime,
-      specialRequests
+      peoples,
+      paymentMethod = "Stripe",
+      transactionId = "",
+      paymentStatus = "pending"
     } = req.body;
+
+    const normalizedPaymentMethod = paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1).toLowerCase();
+    if (!["Stripe", "Wallet"].includes(normalizedPaymentMethod)) {
+      return sendBadRequest(res, "Invalid payment method. Only Stripe and Wallet are supported.");
+    }
 
     const userId = req.user._id;
 
-    // Validate input dates
-    if (!startDate || !endDate) {
-      return res.status(400).json({
-        success: false,
-        message: 'Start date and end date are required'
-      });
+    if (!mongoose.Types.ObjectId.isValid(hallId)) {
+      return sendBadRequest(res, "Invalid hall ID");
     }
 
-    // Convert DD-MM-YYYY to Date object
+    if (!peoples || peoples <= 0) {
+      return sendBadRequest(res, "Number of people is required and must be greater than zero");
+    }
+
+    if (!startDate || !endDate) {
+      return sendBadRequest(res, "Start date and end date are required");
+    }
+
     const convertToDate = (dateString) => {
       const [day, month, year] = dateString.split('-');
       return new Date(`${year}-${month}-${day}`);
@@ -34,39 +47,30 @@ export const createHallBooking = async (req, res) => {
     const start = convertToDate(startDate);
     const end = convertToDate(endDate);
 
-    // Validate date conversion
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid date format. Please use DD-MM-YYYY'
-      });
+      return sendBadRequest(res, "Invalid date format. Please use DD-MM-YYYY");
     }
 
     if (end <= start) {
-      return res.status(400).json({
-        success: false,
-        message: 'End date must be after start date'
-      });
+      return sendBadRequest(res, "End date must be after start date");
     }
 
     const hall = await hallModel.findById(hallId);
     if (!hall) {
-      return res.status(404).json({
-        success: false,
-        message: 'Hall not found'
-      });
+      return sendNotFound(res, "Hall not found");
     }
 
     if (!hall.isAvailable) {
-      return res.status(400).json({
-        success: false,
-        message: 'Hall is not available for booking'
-      });
+      return sendBadRequest(res, "Hall is not available for booking");
+    }
+
+    if (peoples > hall.capacity) {
+      return sendBadRequest(res, `Hall capacity exceeded. Maximum capacity is ${hall.capacity} people.`);
     }
 
     const existingBooking = await hallBookingModel.findOne({
       hallId,
-      status: { $in: ['pending', 'confirmed'] },
+      bookingStatus: { $in: ['pending', 'Confirmed', 'Upcoming'] },
       $or: [
         {
           startDate: { $lte: end },
@@ -76,243 +80,401 @@ export const createHallBooking = async (req, res) => {
     });
 
     if (existingBooking) {
-      return res.status(400).json({
-        success: false,
-        message: 'Hall is already booked for the selected dates'
-      });
+      return sendBadRequest(res, "Hall is already booked for the selected dates");
     }
-    // If you want to validate including current datetime
+
     const currentDateTime = new Date();
-
-    if (start <= currentDateTime) {
-      return res.status(400).json({
-        success: false,
-        message: 'Start date and time must be in the future'
-      });
+    currentDateTime.setHours(0,0,0,0);
+    if (start < currentDateTime) {
+      return sendBadRequest(res, "Start date cannot be in the past");
     }
 
-    if (end <= currentDateTime) {
-      return res.status(400).json({
-        success: false,
-        message: 'End date and time must be in the future'
-      });
-    }
-    const totalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+    const totalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) || 1;
 
-    if (totalDays <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Booking must be for at least 1 day'
-      });
-    }
+    const basePricePerDay = hall.discountPrice || hall.actualPrice;
+    const baseSubtotal = basePricePerDay * totalDays;
 
-    const basePrice = (hall.discountPrice || 0) * totalDays;
-
-    const actualPrice = basePrice;
+    const actualPriceTotal = baseSubtotal;
     const discountPercentage = 10;
-    const discountAmount = (actualPrice * discountPercentage) / 100;
-    const discountPrice = actualPrice - discountAmount;
+    const discountAmount = (actualPriceTotal * discountPercentage) / 100;
+    const amountAfterDiscount = actualPriceTotal - discountAmount;
 
     const taxesAndFeesPercentage = 23;
-    const taxesAndFeesAmount = (discountPrice * taxesAndFeesPercentage) / 100;
+    const taxesAndFeesAmount = (amountAfterDiscount * taxesAndFeesPercentage) / 100;
+    const finalAmount = amountAfterDiscount + taxesAndFeesAmount;
 
-    const finalAmount = discountPrice + taxesAndFeesAmount;
+    const round = (num) => Math.round(num * 100) / 100;
+
+    const user = await userModel.findById(userId);
+    if (!user) return sendNotFound(res, "User not found");
+
+    // Wallet Balance Check
+    if (normalizedPaymentMethod === "Wallet") {
+      if ((user.walletBalance || 0) < finalAmount) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient wallet balance. Your balance is ₹${user.walletBalance || 0}, but the total is ₹${finalAmount.toFixed(2)}.`
+        });
+      }
+    }
+
+    const generatedBookingId = uuidv4();
 
     const booking = new hallBookingModel({
       userId,
+      adminId: hall.adminId,
       hallId,
       startDate: start,
       endDate: end,
       startTime,
       endTime,
       totalDays,
-      basePrice,
-      actualPrice,
-      discountPercentage,
-      discountAmount,
-      discountPrice,
-      taxesAndFeesPercentage,
-      taxesAndFeesAmount,
-      finalAmount,
-      specialRequests: specialRequests || ''
+      peoples,
+      pricing: {
+        basePrice: basePricePerDay,
+        actualPrice: actualPriceTotal,
+        discountPercentage,
+        discountAmount,
+        discountPrice: amountAfterDiscount,
+        taxesAndFeesPercentage,
+        taxesAndFeesAmount,
+        finalAmount: round(finalAmount),
+        currency: "INR"
+      },
+      bookingId: generatedBookingId,
+      bookingStatus: (normalizedPaymentMethod === "Wallet" || paymentStatus === "completed" || paymentStatus === "confirmed") ? 'Upcoming' : 'pending',
+      payment: {
+        paymentStatus: (normalizedPaymentMethod === "Wallet") ? 'completed' : paymentStatus,
+        paymentMethod: normalizedPaymentMethod,
+        transactionId: transactionId || generatedBookingId,
+        paymentDate: new Date()
+      }
     });
 
     await booking.save();
 
-    await booking.populate('hallId', 'name price location capacity amenities');
+    if (normalizedPaymentMethod === "Wallet") {
+      user.walletBalance -= finalAmount;
+      await user.save();
 
-    const formattedResponse = {
-      bookingId: booking._id,
-      hallDetails: {
-        hallId: hall._id,
-        hallName: hall.name,
-        location: hall.location,
-        capacity: hall.capacity
-      },
-      bookingDetails: {
-        startDate: startDate,
-        endDate: endDate,
-        startTime,
-        endTime,
-        totalDays
-      },
-      billingSummary: {
-        actualPrice,
-        discount: {
-          percentage: discountPercentage,
-          amount: discountAmount
-        },
-        discountPrice,
-        taxesAndFees: {
-          percentage: taxesAndFeesPercentage,
-          amount: taxesAndFeesAmount
-        },
-        finalAmount
-      },
-      status: booking.status,
-      createdAt: booking.createdAt
-    };
+      const wTxn = new WalletTransactionModel({
+        userId,
+        amount: finalAmount,
+        type: "debit",
+        description: `Hall Booking - ${hall.name}`,
+        status: "completed"
+      });
+      await wTxn.save();
 
-    res.status(201).json({
-      success: true,
-      message: 'Booking created successfully',
-      data: formattedResponse
-    });
+      booking.payment.transactionId = wTxn._id.toString();
+      await booking.save();
+    }
 
+    await booking.populate('hallId', 'name image location capacity');
+
+    return sendSuccess(res, normalizedPaymentMethod === "Wallet" ? "Booking confirmed via Wallet" : "Booking created successfully", [booking]);
   } catch (error) {
     console.error('Error creating hall booking:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server Error',
-      error: error.message
-    });
+    return sendError(res, "Failed to create booking", error);
   }
 };
 
-
-
-// @desc    Get user bookings
-// @route   GET /api/bookings/my-bookings
-// @access  Private
 export const getUserHallBookings = async (req, res) => {
   try {
     const userId = req.user._id;
 
     const bookings = await hallBookingModel.find({ userId })
-      .populate('hallId')
+      .populate('hallId', 'name image location address')
       .sort({ createdAt: -1 });
 
-    res.json({
-      success: true,
-      count: bookings.length,
-      data: bookings
-    });
+    return sendSuccess(res, "Your bookings fetched successfully", bookings);
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Server Error',
-      error: error.message
-    });
+    console.error("GetUserHallBookings error:", error);
+    return sendError(res, "Failed to fetch your bookings", error);
   }
 };
 
-// @desc    Get single booking
-// @route   GET /api/bookings/:id
-// @access  Private
+export const getHallBookings = async (req, res) => {
+  try {
+    const adminId = req.admin?._id;
+    if (!adminId) return sendBadRequest(res, "Admin ID not found");
+
+    const bookings = await hallBookingModel.find({ adminId })
+      .populate('hallId', 'name')
+      .populate('userId', 'name email phone')
+      .sort({ createdAt: -1 });
+
+    return sendSuccess(res, "All bookings fetched successfully", bookings);
+  } catch (error) {
+    console.error("GetHallBookings error:", error);
+    return sendError(res, "Failed to fetch bookings", error);
+  }
+};
+
 export const getHallBookingById = async (req, res) => {
   try {
-    const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return sendBadRequest(res, "Something went wrong in params Id")
+    const { id: bookingId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+      return sendBadRequest(res, "Invalid booking ID");
     }
-    const booking = await hallBookingModel.findById(id)
+
+    const booking = await hallBookingModel.findById(bookingId)
       .populate('hallId')
       .populate('userId', 'name email phone');
 
     if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: 'Booking not found'
-      });
+      return sendNotFound(res, "Booking not found");
     }
 
-    // Check if user owns the booking or is admin
-    if (String(booking.adminId).toString() !== String(req.admin.id)) {
+    const isOwner = req.user && String(booking.userId._id) === String(req.user._id);
+    const isAdmin = !!req.admin;
+
+    if (!isOwner && !isAdmin) {
       return res.status(403).json({
         success: false,
-        message: 'Not authorized to access this booking'
+        message: "Not authorized to access this booking"
       });
     }
 
-    res.json({
-      success: true,
-      data: booking
-    });
+    return sendSuccess(res, "Booking details fetched successfully", [booking]);
   } catch (error) {
-    if (error.kind === 'ObjectId') {
-      return res.status(404).json({
-        success: false,
-        message: 'Booking not found'
-      });
-    }
-    res.status(500).json({
-      success: false,
-      message: 'Server Error',
-      error: error.message
-    });
+    console.error("GetHallBookingById error:", error);
+    return sendError(res, "Failed to fetch booking details", error);
   }
 };
 
-// @desc    Cancel booking
-// @route   PUT /api/bookings/:id/cancel
-// @access  Private
 export const cancelHallBooking = async (req, res) => {
   try {
-    const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return sendBadRequest(res, "Something went wrong in params Id")
-    }
-    const booking = await hallBookingModel.findById(id);
+    const { id: bookingId } = req.params;
 
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+      return sendBadRequest(res, "Invalid booking ID");
+    }
+
+    const booking = await hallBookingModel.findById(bookingId);
     if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: 'Booking not found'
-      });
+      return sendNotFound(res, "Booking not found");
     }
 
-    // Check if user owns the booking
     if (String(booking.userId) !== String(req.user._id)) {
       return res.status(403).json({
         success: false,
-        message: 'Not authorized to cancel this booking'
+        message: "Not authorized to cancel this booking"
       });
     }
 
-    // Check if booking can be cancelled
-    if (booking.status === 'cancelled') {
-      return res.status(400).json({
-        success: false,
-        message: 'Booking is already cancelled'
-      });
+    if (booking.bookingStatus === 'Cancelled') {
+      return sendBadRequest(res, "Booking is already cancelled");
     }
 
-    booking.status = 'cancelled';
+    booking.bookingStatus = 'Cancelled';
     await booking.save();
 
-    res.json({
-      success: true,
-      message: 'Booking cancelled successfully',
-      data: booking
-    });
+    return sendSuccess(res, "Booking cancelled successfully", [booking]);
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Server Error',
-      error: error.message
-    });
+    console.error("CancelHallBooking error:", error);
+    return sendError(res, "Failed to cancel booking", error);
   }
 };
 
+export const updateHallBookingStatus = async (req, res) => {
+  try {
+    const adminId = req.admin?._id;
+    if (!adminId) return sendBadRequest(res, "Admin ID not found");
 
+    const { id } = req.params;
+    const { status, bookingStatus } = req.body;
+    const finalStatus = status || bookingStatus;
 
+    if (!finalStatus) return sendBadRequest(res, "Status is required");
+
+    const validStatuses = ["pending", "Upcoming", "Completed", "Cancelled", "Refunded", "Confirmed"];
+    if (!validStatuses.includes(finalStatus)) {
+      return sendBadRequest(res, "Invalid booking status");
+    }
+
+    const booking = await hallBookingModel.findById(id);
+    if (!booking) return sendNotFound(res, "Booking not found");
+
+    const previousStatus = booking.bookingStatus.toLowerCase();
+    const newStatus = finalStatus.toLowerCase();
+
+    if (newStatus === "cancelled" && previousStatus !== "cancelled") {
+      const isPaid = booking.payment.paymentStatus === "completed" || booking.payment.paymentStatus === "confirmed";
+      if (isPaid) {
+        const amountToRefund = booking.pricing.finalAmount;
+        const user = await userModel.findById(booking.userId);
+        if (user) {
+          user.walletBalance = (user.walletBalance || 0) + amountToRefund;
+          await user.save();
+          const wTxn = new WalletTransactionModel({
+            userId: user._id,
+            amount: amountToRefund,
+            type: "credit",
+            description: `Refund for Hall Booking (Cancelled by Admin) - ${booking.bookingId || booking._id}`,
+            status: "completed"
+          });
+          await wTxn.save();
+          booking.payment.paymentStatus = "refunded";
+          booking.payment.transactionId = wTxn._id.toString();
+        }
+      }
+    }
+
+    booking.bookingStatus = finalStatus;
+    await booking.save();
+
+    await booking.populate('hallId', 'name location image');
+    await booking.populate('userId', 'name email phone');
+
+    return sendSuccess(res, `Booking status updated to ${finalStatus} successfully`, [booking]);
+
+  } catch (error) {
+    console.error("Update Hall Booking Status Error:", error);
+    return sendError(res, "Failed to update booking status", error);
+  }
+};
+
+export const updateHallPaymentStatus = async (req, res) => {
+  try {
+    const adminId = req.admin?._id;
+    if (!adminId) return sendBadRequest(res, "Admin ID not found");
+
+    const { id } = req.params;
+    const { status, paymentStatus, transactionId, paymentMethod, paymentDate } = req.body;
+    const finalStatus = status || paymentStatus;
+
+    const validStatuses = ["pending", "confirmed", "cancelled", "completed", "refunded", "failed"];
+    if (!finalStatus || !validStatuses.includes(finalStatus.toLowerCase())) {
+      return sendBadRequest(res, "Invalid payment status");
+    }
+
+    const booking = await hallBookingModel.findById(id);
+    if (!booking) return sendNotFound(res, "Booking not found");
+
+    const previousPaymentStatus = booking.payment.paymentStatus.toLowerCase();
+    const newPaymentStatus = finalStatus.toLowerCase();
+
+    if (newPaymentStatus === "cancelled" && (previousPaymentStatus === "completed" || previousPaymentStatus === "confirmed")) {
+      const amountToRefund = booking.pricing.finalAmount;
+      const user = await userModel.findById(booking.userId);
+      if (user) {
+        user.walletBalance = (user.walletBalance || 0) + amountToRefund;
+        await user.save();
+        const wTxn = new WalletTransactionModel({
+          userId: user._id,
+          amount: amountToRefund,
+          type: "credit",
+          description: `Refund for Hall Booking (Payment Cancelled by Admin) - ${booking.bookingId || booking._id}`,
+          status: "completed"
+        });
+        await wTxn.save();
+        booking.payment.paymentStatus = "refunded";
+        booking.payment.transactionId = wTxn._id.toString();
+        booking.bookingStatus = "Cancelled";
+      } else {
+        booking.payment.paymentStatus = newPaymentStatus;
+        booking.bookingStatus = "Cancelled";
+      }
+    } else {
+      booking.payment.paymentStatus = newPaymentStatus;
+      if (transactionId) booking.payment.transactionId = transactionId;
+      if (paymentMethod) booking.payment.paymentMethod = paymentMethod;
+
+      if (newPaymentStatus === "completed" || newPaymentStatus === "confirmed") {
+        booking.bookingStatus = "Upcoming";
+        booking.payment.paymentDate = paymentDate ? new Date(paymentDate) : new Date();
+      } else if (newPaymentStatus === "cancelled" || newPaymentStatus === "failed") {
+        booking.bookingStatus = "Cancelled";
+      }
+    }
+
+    await booking.save();
+    return sendSuccess(res, "Payment status updated successfully", [booking]);
+
+  } catch (error) {
+    console.error("Update Hall Payment Status Error:", error);
+    return sendError(res, "Failed to update payment status", error);
+  }
+};
+
+export const getHallBookingStatistics = async (req, res) => {
+  try {
+    const adminId = req.admin._id;
+
+    const adminHalls = await hallModel.find({ adminId }).select('_id');
+    const hallIds = adminHalls.map(h => h._id);
+
+    const stats = await hallBookingModel.aggregate([
+      { $match: { hallId: { $in: hallIds } } },
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 },
+          totalRevenue: { $sum: "$finalAmount" }
+        }
+      }
+    ]);
+
+    const formattedStats = {
+      pending: 0,
+      confirmed: 0,
+      cancelled: 0,
+      completed: 0,
+      total: 0,
+      totalRevenue: 0
+    };
+
+    stats.forEach(s => {
+      if (formattedStats.hasOwnProperty(s._id)) {
+        formattedStats[s._id] = s.count;
+      }
+      formattedStats.total += s.count;
+      formattedStats.totalRevenue += s.totalRevenue;
+    });
+
+    return sendSuccess(res, "Booking statistics fetched successfully", [formattedStats]);
+  } catch (error) {
+    console.error("GetHallBookingStatistics error:", error);
+    return sendError(res, "Failed to fetch statistics", error);
+  }
+};
+
+export const checkInGuest = async (req, res) => {
+  try {
+    const { id: bookingId } = req.params;
+
+    const booking = await hallBookingModel.findById(bookingId);
+    if (!booking) return sendNotFound(res, "Booking not found");
+
+    if (booking.bookingStatus !== 'Confirmed') {
+      return sendBadRequest(res, "Only confirmed bookings can be checked in");
+    }
+
+    booking.bookingStatus = 'Completed'; // For halls, check-in often marks the event as active/done
+    await booking.save();
+
+    return sendSuccess(res, "Guest checked in successfully", [booking]);
+  } catch (error) {
+    return sendError(res, "Check-in failed", error);
+  }
+};
+
+export const checkOutGuest = async (req, res) => {
+  try {
+    const { id: bookingId } = req.params;
+
+    const booking = await hallBookingModel.findByIdAndUpdate(
+      bookingId,
+      { bookingStatus: 'Completed' },
+      { new: true }
+    );
+
+    if (!booking) return sendNotFound(res, "Booking not found");
+
+    return sendSuccess(res, "Guest checked out successfully", [booking]);
+  } catch (error) {
+    return sendError(res, "Check-out failed", error);
+  }
+};

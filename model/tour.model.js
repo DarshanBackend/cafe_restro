@@ -34,6 +34,10 @@ const tourSchema = new mongoose.Schema({
     type: Number,
     default: null
   },
+  totalPrice: {
+    type: Number,
+    default: null
+  },
   contactNo: { // Fixed typo from contatcNo to contactNo
     type: String,
     default: null

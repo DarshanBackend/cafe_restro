@@ -21,7 +21,8 @@ export const createHall = async (req, res) => {
       category,
       capacity,
       amenities,
-      isAvailable = true
+      isAvailable = true,
+      ourService
     } = req.body;
 
     const adminId = req.admin._id;
@@ -42,25 +43,17 @@ export const createHall = async (req, res) => {
       return sendBadRequest(res, "A hall with this name already exists");
     }
 
-    // ---- File uploads - USE EXACT SAME FIELD NAMES ----
-    const featuredFile = req.files?.featured?.[0];
-    const galleryFiles = Array.isArray(req.files?.gallery) ? req.files.gallery : [];
+    // ---- File uploads ----
+    const imageFile = req.files?.image?.[0] || req.files?.featured?.[0] || req.files?.images?.[0];
 
-    const featuredUrl = featuredFile
+    const imageUrl = imageFile
       ? await uploadToS3(
-        await resizeImage(featuredFile.buffer, { width: 1280, height: 720 }),
-        featuredFile.originalname,
-        featuredFile.mimetype,
+        await resizeImage(imageFile.buffer, { width: 1280, height: 720 }),
+        imageFile.originalname,
+        imageFile.mimetype,
         "halls"
       )
       : null;
-
-    const galleryUrls = await Promise.all(
-      galleryFiles.map(async (file) => {
-        const buffer = await resizeImage(file.buffer, { width: 1024, height: 768 });
-        return await uploadToS3(buffer, file.originalname, file.mimetype, "halls/gallery");
-      })
-    );
 
     // ---- Parse JSON fields ----
     const parsed = (v, fallback = []) => (typeof v === "string" ? JSON.parse(v) : v || fallback);
@@ -78,10 +71,12 @@ export const createHall = async (req, res) => {
       category: category?.trim() || "Standard",
       capacity: Number(capacity) || 100,
       amenities: parsed(amenities),
-      images: {
-        featuredImage: featuredUrl,
-        galleryImages: galleryUrls
-      },
+      image: imageUrl,
+      ourService: parsed(ourService, {
+        connectVieCall: null,
+        connectVieMessage: null,
+        helpSupport: null
+      }),
       isAvailable: isAvailable === "true" || isAvailable === true,
       createdBy: req.admin._id
     });
@@ -101,7 +96,7 @@ export const createHall = async (req, res) => {
     return sendSuccess(res, "Hall created successfully", hall);
   } catch (error) {
     console.error(`createHall Error: ${error.message}`);
-    return sendError(res, 500, "Failed to create hall", error.message);
+    return sendError(res, "Failed to create hall", error);
   }
 };
 
@@ -177,33 +172,48 @@ export const getAllHalls = async (req, res) => {
 // @access  Public
 export const getHallById = async (req, res) => {
   try {
-    const hall = await hallModel.findById(req.params.id)
-      .populate('adminId');
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return sendBadRequest(res, "Invalid hall ID");
+    }
+
+    const hall = await hallModel.findById(id).populate('adminId', 'name email contact phone');
 
     if (!hall) {
-      return res.status(404).json({
-        success: false,
-        message: "Hall not found"
-      });
+      return sendNotFound(res, "Hall not found");
     }
 
-    res.json({
-      success: true,
-      data: hall
-    });
+    // Standardized response for premium UI
+    const result = {
+      _id: hall._id,
+      name: hall.name,
+      description: hall.description,
+      actualPrice: hall.actualPrice,
+      discountPrice: hall.discountPrice,
+      location: hall.location,
+      address: hall.address,
+      type: hall.type,
+      category: hall.category,
+      capacity: hall.capacity,
+      rating: hall.rating || 0,
+      reviewCount: hall.reviewCount || 0,
+      amenities: hall.amenities || [],
+      image: hall.image || null,
+      ourService: hall.ourService || {
+        connectVieCall: null,
+        connectVieMessage: null,
+        helpSupport: null
+      },
+      isAvailable: hall.isAvailable,
+      admin: hall.adminId
+    };
+
+    return sendSuccess(res, "Hall details fetched successfully", result);
 
   } catch (error) {
-    if (error.kind === 'ObjectId') {
-      return res.status(404).json({
-        success: false,
-        message: "Hall not found"
-      });
-    }
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-      error: error.message
-    });
+    console.error("Get hall by ID error:", error);
+    return sendError(res, "Server error while fetching hall details", error);
   }
 };
 
@@ -216,7 +226,7 @@ export const getPopularHalls = async (req, res) => {
         isAvailable: true,
         rating: { $gte: 4 } // Only halls with rating 4+ 
       })
-      .select('name actualPrice discountPrice location type category capacity amenities images rating reviewCount')
+      .select('name actualPrice discountPrice location type category capacity amenities image rating reviewCount')
       .sort({
         rating: -1,
         reviewCount: -1,
@@ -229,7 +239,7 @@ export const getPopularHalls = async (req, res) => {
     if (popularHalls.length === 0) {
       const recentHalls = await hallModel
         .find({ isAvailable: true })
-        .select('name actualPrice discountPrice location type category capacity amenities images rating reviewCount')
+        .select('name actualPrice discountPrice location type category capacity amenities image rating reviewCount')
         .sort({ createdAt: -1 })
         .limit(parseInt(limit))
         .populate('adminId', 'name email');
@@ -272,7 +282,8 @@ export const updateHall = async (req, res) => {
       category,
       capacity,
       amenities,
-      isAvailable
+      isAvailable,
+      ourService
     } = req.body;
 
     const hall = await hallModel.findById(req.params.id);
@@ -292,41 +303,24 @@ export const updateHall = async (req, res) => {
     }
 
     // File uploads
-    const featuredFile = req.files?.featuredImage?.[0];
-    const galleryFiles = req.files?.galleryImages || [];
+    const imageFile = req.files?.image?.[0] || req.files?.featured?.[0] || req.files?.images?.[0];
 
-    // Update featured image if provided
-    if (featuredFile) {
-      // Delete old featured image
-      if (hall.images.featuredImage) {
-        const oldImageKey = hall.images.featuredImage.split(".amazonaws.com/")[1];
+    // Update image if provided
+    if (imageFile) {
+      // Delete old image
+      if (hall.image) {
+        const oldImageKey = hall.image.split(".amazonaws.com/")[1];
         if (oldImageKey) {
-          await deleteFromS3(oldImageKey).catch(err => log.warn("Failed to delete old featured image:", err.message));
+          await deleteFromS3(oldImageKey).catch(err => log.warn("Failed to delete old image:", err.message));
         }
       }
 
-      hall.images.featuredImage = await uploadToS3(
-        await resizeImage(featuredFile.buffer, { width: 1280, height: 720 }),
-        featuredFile.originalname,
-        featuredFile.mimetype,
-        "halls/featured"
+      hall.image = await uploadToS3(
+        await resizeImage(imageFile.buffer, { width: 1280, height: 720 }),
+        imageFile.originalname,
+        imageFile.mimetype,
+        "halls"
       );
-    }
-
-    // Add new gallery images if provided
-    if (galleryFiles.length > 0) {
-      const newGalleryUrls = await Promise.all(
-        galleryFiles.map(async (file) => {
-          const buffer = await resizeImage(file.buffer, { width: 1024, height: 768 });
-          return await uploadToS3(
-            buffer,
-            file.originalname,
-            file.mimetype,
-            "halls/gallery"
-          );
-        })
-      );
-      hall.images.galleryImages.push(...newGalleryUrls);
     }
 
     // Parse JSON fields
@@ -353,6 +347,7 @@ export const updateHall = async (req, res) => {
     if (capacity !== undefined) hall.capacity = Number(capacity);
     if (amenities !== undefined) hall.amenities = parseArray(amenities) || hall.amenities;
     if (isAvailable !== undefined) hall.isAvailable = isAvailable === 'true' || isAvailable === true;
+    if (ourService !== undefined) hall.ourService = parseArray(ourService) || hall.ourService;
 
     await hall.save();
 
@@ -402,18 +397,10 @@ export const deleteHall = async (req, res) => {
     // Collect all images to delete from S3
     const imagesToDelete = [];
 
-    // Featured image
-    if (hall.images.featuredImage) {
-      const key = hall.images.featuredImage.split(".amazonaws.com/")[1];
+    // Image
+    if (hall.image) {
+      const key = hall.image.split(".amazonaws.com/")[1];
       if (key) imagesToDelete.push(key);
-    }
-
-    // Gallery images
-    if (Array.isArray(hall.images.galleryImages) && hall.images.galleryImages.length > 0) {
-      hall.images.galleryImages.forEach((url) => {
-        const key = url.split(".amazonaws.com/")[1];
-        if (key) imagesToDelete.push(key);
-      });
     }
 
     // Delete all images from S3
@@ -430,7 +417,6 @@ export const deleteHall = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Delete hall error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to delete hall",
@@ -440,133 +426,108 @@ export const deleteHall = async (req, res) => {
 };
 
 export const deleteGalleryImage = async (req, res) => {
-  try {
-    const { id, imageIndex } = req.params;
-
-    const hall = await hallModel.findById(id);
-    if (!hall) {
-      return res.status(404).json({
-        success: false,
-        message: "Hall not found"
-      });
-    }
-
-    // Check if admin owns this hall
-    if (hall.adminId.toString() !== req.admin._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: "Not authorized to modify this hall"
-      });
-    }
-
-    const index = parseInt(imageIndex);
-    if (index < 0 || index >= hall.images.galleryImages.length) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid image index"
-      });
-    }
-
-    // Delete image from S3
-    const imageUrl = hall.images.galleryImages[index];
-    const key = imageUrl.split(".amazonaws.com/")[1];
-    if (key) {
-      await deleteFromS3(key).catch(err => log.warn("Failed to delete gallery image from S3:", err.message));
-    }
-
-    // Remove from array
-    hall.images.galleryImages.splice(index, 1);
-    await hall.save();
-
-    res.json({
-      success: true,
-      message: "Gallery image deleted successfully",
-      data: hall
-    });
-
-  } catch (error) {
-    console.error("Delete gallery image error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to delete gallery image",
-      error: error.message
-    });
-  }
+  return res.status(410).json({ success: false, message: "Gallery feature is no longer available" });
 };
 
 export const getPreviewBillingOfHall = async (req, res) => {
   try {
     const { hallId } = req.params;
-    const { numberOfday } = req.query;
+    const { numberOfday = 1 } = req.query;
 
     if (!hallId || !mongoose.Types.ObjectId.isValid(hallId)) {
-      return sendBadRequest(res, "Something went wrong with hallId");
+      return sendBadRequest(res, "Invalid hall ID");
     }
 
-    // Convert numberOfday to number and validate
     const numberOfDays = parseInt(numberOfday);
     if (isNaN(numberOfDays) || numberOfDays <= 0) {
-      return sendBadRequest(res, "Query parameter (numberOfday must be a positive number)");
+      return sendBadRequest(res, "Number of days must be a positive number");
     }
 
-    const hall = await hallModel.findOne({ _id: hallId });
-
+    const hall = await hallModel.findById(hallId);
     if (!hall) {
-      return sendNotFound(res, "Hall Not Found");
+      return sendNotFound(res, "Hall not found");
     }
 
-    const basePricePerDay = hall.discountPrice; 
-    const subTotal = basePricePerDay * numberOfDays;
+    const basePricePerDay = hall.discountPrice || hall.actualPrice;
+    const baseSubtotal = basePricePerDay * numberOfDays;
 
-    const actualPriceTotal = subTotal;
+    const actualPrice = baseSubtotal;
     const discountPercentage = 10;
-    const discountAmount = (actualPriceTotal * discountPercentage) / 100;
-    const discountPriceTotal = actualPriceTotal - discountAmount;
+    const discountAmount = (actualPrice * discountPercentage) / 100;
+    const amountAfterDiscount = actualPrice - discountAmount;
 
     const taxesAndFeesPercentage = 23;
-    const taxesAndFeesAmount = (discountPriceTotal * taxesAndFeesPercentage) / 100;
-    const totalAmount = discountPriceTotal + taxesAndFeesAmount;
+    const taxesAndFeesAmount = (amountAfterDiscount * taxesAndFeesPercentage) / 100;
+    const totalAmount = amountAfterDiscount + taxesAndFeesAmount;
+
+    const round = (num) => Math.round(num * 100) / 100;
 
     const formattedResponse = {
       hallDetails: {
-        hallId: hall._id,
-        hallName: hall.name,
-        actualPrice: hall.actualPrice,
-        offeredPrice: hall.discountPrice
+        id: hall._id,
+        name: hall.name,
+        type: hall.type,
+        address: hall.address,
+        image: hall.image || null
       },
-      billingSummary: {
-        numberOfDays: numberOfDays,
-        subTotal: subTotal,
-        mandatoryDiscount: {
-          percentage: discountPercentage,
-          amount: discountAmount
-        },
-        discountPrice: discountPriceTotal,
-        taxesAndFees: {
-          percentage: taxesAndFeesPercentage,
-          amount: taxesAndFeesAmount
-        },
-        totalAmount: Number(totalAmount.toFixed(2))
-      },
-      breakdown: {
-        basePrice: subTotal,
-        additionalCharges: [
+      paymentSummary: {
+        title: "Payment Information",
+        items: [
           {
-            name: `Tax (${taxesAndFeesPercentage}%)`,
-            amount: taxesAndFeesAmount
+            label: `1 Hall * ${numberOfDays} Day${numberOfDays > 1 ? 's' : ''}`,
+            value: `\u20B9${round(baseSubtotal).toFixed(2)}`
+          },
+          {
+            label: "Discount",
+            value: `${discountPercentage}%`,
+            color: "blue"
+          },
+          {
+            label: "With Discount",
+            value: `\u20B9${round(amountAfterDiscount).toFixed(2)}`
+          },
+          {
+            label: "Taxes \u0026 Services",
+            value: `\u20B9${round(taxesAndFeesAmount).toFixed(2)}`
+          },
+          {
+            label: "Total Amount of Paid",
+            value: `\u20B9${round(totalAmount).toFixed(2)}`,
+            bold: true
           }
-        ]
+        ],
+        totalAmount: round(totalAmount).toFixed(2),
+        currency: "INR",
+        proceedAction: "Process To Paid"
       }
     };
 
     return res.status(200).json({
       success: true,
-      message: "Billing preview generated successfully",
-      data: formattedResponse
+      message: "Hall billing preview generated successfully",
+      result: [formattedResponse],
+      length: 1
     });
 
   } catch (error) {
-    console.log("Error While Preview hall Billing", error.message);
-    return sendError(res, "Error While Preview hall Billing", error);
+    console.error("Error in getPreviewBillingOfHall:", error.message);
+    return sendError(res, "Error while generating billing preview", error);
+  }
+};
+
+// @desc    Get all halls created by the logged-in admin
+// @route   GET /api/getAdminHalls
+// @access  Private (Admin)
+export const getAdminHalls = async (req, res) => {
+  try {
+    const adminId = req.admin._id;
+
+    const halls = await hallModel.find({ adminId })
+      .sort({ createdAt: -1 });
+
+    return sendSuccess(res, "Admin halls fetched successfully", halls);
+  } catch (error) {
+    console.error("GetAdminHalls error:", error);
+    return sendError(res, "Failed to fetch admin halls", error);
   }
 };

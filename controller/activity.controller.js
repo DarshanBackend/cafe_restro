@@ -13,14 +13,45 @@ const MAX_CACHE_SIZE = 100;
 
 // HTTP client with optimized settings
 const http = axios.create({
-  timeout: 6000,
+  timeout: 15000,
   headers: {
-    "User-Agent": "Mozilla/5.0",
-    "Accept-Encoding": "gzip, deflate"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Accept": "application/json",
+    "Accept-Encoding": "identity",
   },
-  maxRedirects: 3,
-  decompress: true,
+  maxRedirects: 5,
 });
+
+const OVERPASS_URLS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://lz4.overpass-api.de/api/interpreter",
+  "https://z.overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter"
+];
+
+const callOverpass = async (query, timeout = 30000) => {
+  let lastError;
+  for (const url of OVERPASS_URLS) {
+    try {
+      const params = new URLSearchParams();
+      params.append('data', query);
+      const { data } = await axios.post(url, params, {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+          "Accept": "application/json",
+        },
+        timeout
+      });
+      return data;
+    } catch (err) {
+      console.warn(`Overpass mirror ${url} failed:`, err.message);
+      lastError = err;
+      continue;
+    }
+  }
+  throw lastError;
+};
 
 // Cache helper with automatic cleanup
 const getCached = (cache, key) => {
@@ -178,12 +209,8 @@ const fetchOptimizedAttractions = async (cityName) => {
   `;
 
   try {
-    const resp = await http.get("https://overpass-api.de/api/interpreter", {
-      params: { data: query },
-      timeout: 25000,
-    });
-
-    const elements = resp.data?.elements || [];
+    const data = await callOverpass(query, 25000);
+    const elements = data?.elements || [];
 
     const attractions = elements
       .map(el => {
@@ -226,6 +253,14 @@ const createEnhancedGoogleMapsUrl = (lat, lng, name = "") => {
   return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}&query_place_id=${encodedName}`;
 };
 
+const STATIC_COUNTRIES = [
+  { name: "USA", code: "US" }, { name: "Canada", code: "CA" }, { name: "UAE", code: "AE" },
+  { name: "India", code: "IN" }, { name: "Brazil", code: "BR" }, { name: "United Kingdom", code: "GB" },
+  { name: "Australia", code: "AU" }, { name: "Germany", code: "DE" }, { name: "France", code: "FR" },
+  { name: "Japan", code: "JP" }, { name: "Singapore", code: "SG" }, { name: "Italy", code: "IT" },
+  { name: "Spain", code: "ES" }, { name: "Netherlands", code: "NL" }, { name: "Switzerland", code: "CH" }
+];
+
 // Optimized getAllCountries with caching
 export const getAllCountries = async (req, res) => {
   const cached = getCached(cityCache, 'all_countries');
@@ -235,29 +270,36 @@ export const getAllCountries = async (req, res) => {
 
   try {
     const query = `
-      [out:json][timeout:120];
-      relation["boundary"="administrative"]["admin_level"="2"];
+      [out:json][timeout:30];
+      node["place"="country"];
       out tags;
     `;
 
-    const url = "https://overpass-api.de/api/interpreter";
-    const { data } = await http.get(url, {
-      params: { data: query },
-      timeout: 120000
-    });
+    let data;
+    try {
+      data = await callOverpass(query, 20000); // Shorter timeout for faster fallback
+    } catch (overpassError) {
+      console.warn("Overpass failed, using static fallback countries");
+      setCached(cityCache, 'all_countries', STATIC_COUNTRIES);
+      return sendSuccess(res, "All countries fetched successfully (fallback)", STATIC_COUNTRIES);
+    }
 
     const countries = (data.elements || [])
       .map((el) => ({
-        name: el.tags?.name,
+        name: el.tags?.name || el.tags?.["name:en"],
         code: el.tags?.["ISO3166-1"] || el.tags?.["ISO3166-1:alpha2"] || null,
       }))
       .filter((c) => c.name);
 
-    setCached(cityCache, 'all_countries', countries);
-    return sendSuccess(res, "All countries fetched successfully", countries);
+    // If Overpass returned nothing, use fallback
+    const result = countries.length > 0 ? countries : STATIC_COUNTRIES;
+
+    setCached(cityCache, 'all_countries', result);
+    return sendSuccess(res, "All countries fetched successfully", result);
   } catch (error) {
     console.error("Error fetching countries:", error.message);
-    return sendError(res, "Error while fetching all countries", error);
+    // Absolute final fallback
+    return sendSuccess(res, "All countries fetched successfully (emergency fallback)", STATIC_COUNTRIES);
   }
 };
 
@@ -279,13 +321,8 @@ export const getCityByCountry = async (req, res) => {
       out tags;
     `;
 
-    const url = "https://overpass-api.de/api/interpreter";
-    const resp = await http.get(url, {
-      params: { data: query },
-      timeout: 120000
-    });
-
-    const elements = resp.data.elements || [];
+    const data = await callOverpass(query, 120000);
+    const elements = data.elements || [];
     const cityNames = elements.map(e => e.tags?.name).filter(Boolean);
 
     setCached(cityCache, cacheKey, cityNames);
@@ -337,6 +374,8 @@ export const bestPlaceByCity = async (req, res) => {
 
             return {
               name: attr.name,
+              locationName: cityName,
+              rating: 4.5,
               latitude: attr.lat,
               longitude: attr.lon,
               images,
@@ -421,7 +460,6 @@ export const getPlaceDeatil = async (req, res) => {
   }
 
   try {
-
     const query = `
       [out:json][timeout:25];
       (
@@ -432,10 +470,7 @@ export const getPlaceDeatil = async (req, res) => {
       out center;
     `;
 
-    const url = "https://overpass-api.de/api/interpreter";
-    const { data } = await axios.post(url, query, {
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    });
+    const data = await callOverpass(query, 25000);
 
     if (!data.elements || !data.elements.length) {
       return res.status(404).json({ error: "Place not found in Overpass" });
@@ -446,13 +481,26 @@ export const getPlaceDeatil = async (req, res) => {
     const lon = place.lon || place.center?.lon;
     const tags = place.tags || {};
 
-
     const images = await fetchMultipleImagesForPlace(placeName, 5);
-
     const mapUrl = createEnhancedGoogleMapsUrl(lat, lon, placeName);
+
+    // Fetch Nearby Hotels & Stays (within ~50km if possible, or just same city)
+    const city = tags["addr:city"] || tags["is_in:city"];
+    const country = tags["addr:country"] || tags["is_in:country"];
+
+    let nearbyHotels = [];
+    if (lat && lon) {
+      // Basic bounding box search for nearby hotels (+/- 0.5 degrees ~50km)
+      nearbyHotels = await hotelModel.find({
+        "location.lat": { $gte: lat - 0.5, $lte: lat + 0.5 },
+        "location.lng": { $gte: lon - 0.5, $lte: lon + 0.5 }
+      }).limit(5).lean();
+    }
 
     const result = {
       name: tags.name || placeName,
+      locationName: country || "",
+      rating: 4.5, // Default placeholder rating
       description:
         tags.wikipedia ||
         tags.description ||
@@ -465,7 +513,15 @@ export const getPlaceDeatil = async (req, res) => {
       primaryImage: images[0] || null,
       imageCount: images.length,
       mapUrl,
-      rawTags: tags, // optional if you want to display OSM data
+      nearbyHotels: nearbyHotels.map(h => ({
+        id: h._id,
+        name: h.name,
+        image: h.images?.[0] || null,
+        address: h.address?.street + ", " + h.address?.city + ", " + h.address?.country,
+        price: h.discountPrice || h.actualPrice,
+        rating: h.averageRating || 4.0
+      })),
+      rawTags: tags
     };
 
     return res.json({

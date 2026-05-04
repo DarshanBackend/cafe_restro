@@ -6,33 +6,44 @@ import { v4 as uuidv4 } from "uuid";
 import log from "../utils/logger.js";
 import coupanModel from "../model/coupan.model.js";
 import { sendNotification } from "../utils/notificatoin.utils.js";
+import userModel from "../model/user.model.js";
+import WalletTransactionModel from "../model/wallet.transaction.model.js";
+import Stripe from "stripe";
 
 // Create new cafe booking
 export const createCafeBooking = async (req, res) => {
   try {
+    if (!process.env.STRIPE_SECRET) {
+      return res.status(500).json({ success: false, message: "Stripe API key is missing in environment variables" });
+    }
+    const stripe = new Stripe(process.env.STRIPE_SECRET);
+    const userId = req.user?._id;
     const { cafeId } = req.params;
+
     const {
-      bookingDate,
-      timeSlot,
-      numberOfGuests,
-      specialRequests,
-      perGuestRate,
-      guestDetails,
-      paymentMethod,
-      transactionId,
-      paymentStatus,
-      paymentDate,
+      checkInDate,
+      checkOutDate,
+      adults = 1,
+      isMySelf = true,
+      name,
+      email,
+      phone,
       couponCode,
-      currency,
+      children = 0,
+      infants = 0,
+      numberOfRooms = 1,
+      specialRequests = "",
+      timeSlot,
+      paymentMethod = "Stripe", // Can be 'Stripe' or 'Wallet'
+      transactionId = "",
+      paymentStatus = "pending",
     } = req.body;
 
-    const userId = req.user?._id;
-
     // Validation
-    if (!cafeId || !bookingDate || !timeSlot || !numberOfGuests) {
+    if (!cafeId || !checkInDate || !checkOutDate || !timeSlot) {
       return res.status(400).json({
         success: false,
-        message: "Cafe ID, booking date, time slot, and number of guests are required",
+        message: "Cafe ID, check-in date, check-out date, and time slot are required",
       });
     }
 
@@ -45,21 +56,28 @@ export const createCafeBooking = async (req, res) => {
       return res.status(404).json({ success: false, message: "Cafe not found" });
     }
 
+    const parseDate = (d) => {
+      const [day, month, year] = d.split("-");
+      return new Date(`${year}-${month}-${day}`);
+    };
+
+    const checkIn = parseDate(checkInDate);
+    const checkOut = parseDate(checkOutDate);
+
     // Prevent booking in past
-    const bookingDateTime = new Date(bookingDate);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    if (bookingDateTime < today) {
+    if (checkIn < today) {
       return res.status(400).json({
         success: false,
-        message: "Booking date cannot be in the past",
+        message: "Check-in date cannot be in the past",
       });
     }
 
     // Check slot availability
     const existingBooking = await cafeBookingModel.findOne({
       cafeId,
-      bookingDate: bookingDateTime,
+      checkInDate: checkIn,
       timeSlot,
       bookingStatus: { $in: ["Upcoming", "pending", "confirmed"] },
     });
@@ -71,18 +89,35 @@ export const createCafeBooking = async (req, res) => {
       });
     }
 
-    // ---------------- Billing Logic ---------------- //
-    const guestRate = perGuestRate || cafe.pricing?.discountPrice || 200;
-    const totalGuestRate = guestRate * numberOfGuests;
+    // ---------------- Billing Logic (Hotel Style) ---------------- //
+    const guestRate = cafe.pricing?.discountPrice || 200;
+    const totalGuests = Number(adults) + Number(children);
+    const totalGuestRate = guestRate * totalGuests * Number(numberOfRooms);
 
     const actualPrice = totalGuestRate;
     const discountPercentage = 10;
     const discountAmount = (actualPrice * discountPercentage) / 100;
     const discountPrice = actualPrice - discountAmount;
-    
+
+    // 🎟️ Coupon Logic
+    let couponDetails = null;
+    let amountAfterCoupon = discountPrice;
+    if (couponCode) {
+      const coupon = await coupanModel.findOne({ couponCode: couponCode.toUpperCase(), isActive: true });
+      if (coupon && (!coupon.couponExpire || new Date(coupon.couponExpire) >= new Date())) {
+        const couponDiscountAmount = (discountPrice * (coupon.couponPerc || 0)) / 100;
+        amountAfterCoupon = discountPrice - couponDiscountAmount;
+        couponDetails = {
+          code: coupon.couponCode,
+          discountPercent: coupon.couponPerc,
+          discountAmount: couponDiscountAmount,
+        };
+      }
+    }
+
     const taxesAndFeesPercentage = 23;
-    const taxesAndFeesAmount = (discountPrice * taxesAndFeesPercentage) / 100;
-    const totalAmount = discountPrice + taxesAndFeesAmount;
+    const taxesAndFeesAmount = (amountAfterCoupon * taxesAndFeesPercentage) / 100;
+    const totalAmount = amountAfterCoupon + taxesAndFeesAmount;
 
     // Optional rounding for cleaner values
     const round = (num) => Math.round(num * 100) / 100;
@@ -94,31 +129,56 @@ export const createCafeBooking = async (req, res) => {
       discountPercentage: round(discountPercentage),
       discountAmount: round(discountAmount),
       discountPrice: round(discountPrice),
+      couponDiscountAmount: couponDetails ? round(couponDetails.discountAmount) : 0,
+      priceAfterCoupon: round(amountAfterCoupon),
       taxesAndFeesPercentage: round(taxesAndFeesPercentage),
       taxesAndFeesAmount: round(taxesAndFeesAmount),
       totalAmount: round(totalAmount),
-      currency: currency || cafe.pricing?.currency || "INR",
+      currency: "INR",
+      couponCode: couponDetails ? couponDetails.code : null,
     };
 
-    console.log("BILLING:", finalPricing);
+    // ---------------- Guest Info Logic (Hotel Style) ---------------- //
+    const normalizedPaymentMethod = paymentMethod ? paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1).toLowerCase() : "Stripe";
 
-    // ---------------- Guest & Payment Info ---------------- //
+    let guestInfo = {};
+    let dbUser = await userModel.findById(userId);
+
+    if (isMySelf || normalizedPaymentMethod === "Wallet") {
+      if (!dbUser) return res.status(404).json({ success: false, message: "User not found" });
+
+      if (isMySelf) {
+        const defaultAddr = dbUser.addresses?.find(a => a.isDefault) || dbUser.addresses?.[0];
+        guestInfo = {
+          name: defaultAddr?.name || dbUser.name,
+          email: defaultAddr?.email || dbUser.email,
+          phone: defaultAddr?.contactNo || dbUser.contactNo,
+          address: defaultAddr?.address || dbUser.address,
+          state: defaultAddr?.state || dbUser.state,
+          country: defaultAddr?.country || dbUser.nationality || dbUser.country,
+        };
+      }
+    }
+
     const guest = {
-      isMySelf: guestDetails?.isMySelf ?? true,
-      name: guestDetails?.name || "",
-      email: guestDetails?.email || "",
-      phone: guestDetails?.phone || "",
-      address: guestDetails?.address || "",
-      state: guestDetails?.state || "",
-      country: guestDetails?.country || "",
+      isMySelf,
+      name: isMySelf ? guestInfo.name : name,
+      email: isMySelf ? guestInfo.email : email,
+      phone: isMySelf ? guestInfo.phone : phone,
+      address: isMySelf ? guestInfo.address : "",
+      state: isMySelf ? guestInfo.state : "",
+      country: isMySelf ? guestInfo.country : "",
     };
 
-    const payment = {
-      transactionId: transactionId || "",
-      paymentStatus: paymentStatus || "pending",
-      paymentMethod: paymentMethod || "Razorpay",
-      paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
-    };
+    // 💰 WALLET BALANCE CHECK
+    if (normalizedPaymentMethod === "Wallet") {
+      if ((dbUser.walletBalance || 0) < totalAmount) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient wallet balance. Your balance is ₹${dbUser.walletBalance || 0}, but the booking total is ₹${totalAmount.toFixed(2)}.`
+        });
+      }
+    }
 
     // ---------------- Create Booking ---------------- //
     const newBooking = new cafeBookingModel({
@@ -126,25 +186,113 @@ export const createCafeBooking = async (req, res) => {
       userId,
       adminId: cafe.createdBy,
       cafeId,
-      bookingDate: bookingDateTime,
+      checkInDate: checkIn,
+      checkOutDate: checkOut,
       timeSlot,
-      numberOfGuests,
+      numberOfGuests: totalGuests,
+      adults,
+      children,
+      infants,
+      numberOfRooms,
       guest,
-      guestInfo: { specialRequests: specialRequests || "" },
+      guestInfo: {
+        specialRequests: specialRequests || "",
+        adults,
+        children,
+        infants
+      },
       pricing: finalPricing,
-      payment,
-      bookingStatus: "Upcoming",
+      payment: {
+        transactionId: transactionId || "",
+        paymentStatus: paymentStatus || "pending",
+        paymentMethod: normalizedPaymentMethod,
+        paymentDate: new Date(),
+      },
+      bookingStatus: "pending",
     });
 
-    await newBooking.save();
-    await newBooking.populate("cafeId", "name location images");
+    const savedBooking = await newBooking.save();
 
-    await sendNotification({ adminId: cafe.createdBy, title: `Your Cafe Booking In Cafe : ${cafe.name}`, description: "Your Booking in Cafe ", image: cafe.images[0] || null, type: "single", userId: userId })
+    // Notification
+    await sendNotification({
+      adminId: cafe.createdBy,
+      title: `New Cafe Booking Created`,
+      description: `Booking ID: ${savedBooking.bookingId}\nCafe: ${cafe.name}\nSlot: ${timeSlot}`,
+      image: cafe.images[0] || null,
+      type: "single",
+      userId,
+    }).catch((err) => console.error("Notification Error:", err.message));
+
+    // Wallet Payment Processing
+    if (normalizedPaymentMethod === "Wallet") {
+      dbUser.walletBalance -= totalAmount;
+      await dbUser.save();
+
+      const wTxn = new WalletTransactionModel({
+        userId,
+        amount: totalAmount,
+        type: "debit",
+        description: `Cafe Booking - ${cafe.name}`,
+        status: "completed"
+      });
+      await wTxn.save();
+
+      savedBooking.payment.paymentStatus = "completed";
+      savedBooking.payment.transactionId = wTxn._id.toString();
+      savedBooking.bookingStatus = "Upcoming";
+      await savedBooking.save();
+
+      return res.status(201).json({
+        success: true,
+        message: "Booking confirmed successfully via Wallet",
+        data: savedBooking,
+      });
+    }
+
+    // Stripe Payment Initialization
+    if (normalizedPaymentMethod === "Stripe") {
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price_data: {
+              currency: "inr",
+              product_data: {
+                name: `Cafe Booking - ${cafe.name}`,
+                description: `Slot: ${timeSlot} | Guests: ${totalGuests}`,
+                images: cafe.images && cafe.images.length > 0 ? [cafe.images[0]] : [],
+              },
+              unit_amount: Math.round(totalAmount * 100),
+            },
+            quantity: 1,
+          },
+        ],
+        mode: "payment",
+        success_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/cafe/success?session_id={CHECKOUT_SESSION_ID}&booking_id=${savedBooking._id}`,
+        cancel_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/cafe/cancel?booking_id=${savedBooking._id}`,
+        metadata: {
+          bookingId: savedBooking._id.toString(),
+          cafeId: cafeId.toString(),
+          userId: userId ? userId.toString() : "guest",
+        },
+      });
+
+      savedBooking.payment.transactionId = session.id;
+      await savedBooking.save();
+
+      return res.status(201).json({
+        success: true,
+        message: "Booking initialized successfully",
+        data: savedBooking,
+        sessionId: session.id,
+        url: session.url
+      });
+    }
 
     return res.status(201).json({
       success: true,
       message: "Cafe booking created successfully",
-      data: newBooking,
+      data: savedBooking,
     });
   } catch (error) {
     console.error("Create Cafe Booking Error:", error);
@@ -155,9 +303,6 @@ export const createCafeBooking = async (req, res) => {
     });
   }
 };
-
-
-
 
 // Get all bookings for a user
 export const getUserBookings = async (req, res) => {
@@ -203,25 +348,37 @@ export const getUserBookings = async (req, res) => {
 // Get all bookings for a cafe (for cafe owners/admins)
 export const getCafeBookings = async (req, res) => {
   try {
-    const { cafeId } = req.params;
+    const adminId = req.admin?._id;
+    if (!adminId) return res.status(400).json({ success: false, message: "Admin ID not found" });
 
-    if (!mongoose.Types.ObjectId.isValid(cafeId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid cafe ID",
-      });
+    const { cafeId } = req.params;
+    const filter = { adminId };
+    if (cafeId && mongoose.Types.ObjectId.isValid(cafeId)) {
+      filter.cafeId = cafeId;
     }
 
-    // Fetch all bookings for this cafe
     const bookings = await cafeBookingModel
-      .find({ cafeId })
-      .populate("userId", "name email phone")
-      .sort({ bookingDate: 1, timeSlot: 1 });
+      .find(filter)
+      .populate("cafeId", "name location images pricing")
+      .populate("userId", "name email phone contactNo")
+      .sort({ createdAt: -1 });
+
+    const now = new Date();
+    for (let booking of bookings) {
+      if (
+        ["confirmed", "upcoming", "pending", "Upcoming", "Confirmed"].includes(booking.bookingStatus) &&
+        booking.checkOutDate && new Date(booking.checkOutDate) < now
+      ) {
+        booking.bookingStatus = "Completed";
+        await booking.save();
+      }
+    }
 
     return res.status(200).json({
       success: true,
-      message: `${bookings.length} bookings found`,
-      data: bookings,
+      message: "Bookings fetched successfully",
+      result: bookings,
+      length: bookings.length
     });
   } catch (error) {
     console.error("Get Cafe Bookings Error:", error);
@@ -232,7 +389,6 @@ export const getCafeBookings = async (req, res) => {
     });
   }
 };
-
 
 // Get booking by ID
 export const getBookingById = async (req, res) => {
@@ -277,19 +433,21 @@ export const previewCafeBooking = async (req, res) => {
   try {
     const { cafeId } = req.params;
     const {
-      bookingDate,
-      startTime,
-      endTime,
-      numberOfTables = 1,
-      numberOfGuests = 1,
+      checkInDate,
+      checkOutDate,
+      adults = 1,
+      children = 0,
+      infants = 0,
+      numberOfRooms = 1,
       specialRequests = "",
-      couponCode
+      couponCode,
+      timeSlot
     } = req.body;
 
-    if (!bookingDate || !startTime || !endTime) {
+    if (!checkInDate || !checkOutDate || !timeSlot) {
       return res.status(400).json({
         success: false,
-        message: "Booking date, startTime, and endTime are required."
+        message: "Check-in date, check-out date, and timeSlot are required."
       });
     }
 
@@ -300,24 +458,31 @@ export const previewCafeBooking = async (req, res) => {
       });
     }
 
-    const bookingDateObj = new Date(bookingDate);
-    if (isNaN(bookingDateObj.getTime())) {
+    const parseDate = (dateStr) => {
+      const [d, m, y] = dateStr.split("-");
+      return new Date(`${y}-${m}-${d}`);
+    };
+
+    const startDate = parseDate(checkInDate);
+    const endDate = parseDate(checkOutDate);
+
+    if (isNaN(startDate) || isNaN(endDate)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid booking date format."
+        message: "Invalid date format (use DD-MM-YYYY)."
       });
     }
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    if (bookingDateObj < today) {
+    if (startDate < today) {
       return res.status(400).json({
         success: false,
-        message: "Booking date cannot be in the past."
+        message: "Check-in date cannot be in the past."
       });
     }
 
-    const cafe = await cafeModel.findById(cafeId);
+    const cafe = await cafeModel.findById(cafeId).populate("themeCategoryId", "name");
     if (!cafe) {
       return res.status(404).json({
         success: false,
@@ -325,114 +490,102 @@ export const previewCafeBooking = async (req, res) => {
       });
     }
 
-    const [startHour, startMin] = startTime.split(":").map(Number);
-    const [endHour, endMin] = endTime.split(":").map(Number);
+    const baseRatePerGuest = cafe.pricing?.discountPrice || 200;
+    const totalGuests = Number(adults) + Number(children);
+    const baseSubtotal = baseRatePerGuest * totalGuests * Number(numberOfRooms);
 
-    const durationHours = (endHour + endMin / 60) - (startHour + startMin / 60);
-    if (durationHours <= 0 || durationHours > 12) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid time range. Duration must be between 1 and 12 hours."
-      });
-    }
-
-    const baseRatePerHour = cafe.pricing?.discountPrice || 100; // Using offered discount price as base
-    const currency = cafe.pricing?.currency || "INR";
-    const baseSubtotal = baseRatePerHour * durationHours * numberOfTables;
-
-    const dayOfWeek = bookingDateObj.getDay();
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-
-    const weekendMultiplier = isWeekend ? 1.1 : 1;
-    const isEvening = endHour >= 18;
-    const peakHourMultiplier = isEvening ? 1.15 : 1;
-
-    const subtotalBeforeDiscount = baseSubtotal * weekendMultiplier * peakHourMultiplier;
-
-    const actualPrice = subtotalBeforeDiscount;
+    const actualPrice = baseSubtotal;
     const discountPercentage = 10;
     const discountAmount = (actualPrice * discountPercentage) / 100;
     const discountPrice = actualPrice - discountAmount;
 
-    // 🎟️ Coupon Logic (Removed custom discounts)
+    // 🎟️ Coupon Logic
     let couponDetails = null;
+    let amountAfterCoupon = discountPrice;
     if (couponCode) {
-      couponDetails = {
-        code: couponCode,
-        discountPercent: discountPercentage,
-        discountApplied: discountAmount,
-        description: "10% Flat Discount"
-      };
+      const coupon = await coupanModel.findOne({ couponCode: couponCode.toUpperCase(), isActive: true });
+      if (coupon && (!coupon.couponExpire || new Date(coupon.couponExpire) >= new Date())) {
+        const couponDiscountPercent = coupon.couponPerc || 0;
+        const couponDiscountAmount = (discountPrice * couponDiscountPercent) / 100;
+        amountAfterCoupon = discountPrice - couponDiscountAmount;
+
+        couponDetails = {
+          code: coupon.couponCode,
+          discountPercent: couponDiscountPercent,
+          discountAmount: couponDiscountAmount,
+          description: `Additional ${couponDiscountPercent}% Coupon Discount Applied`,
+        };
+      }
     }
 
-    // 💰 Charges & Total Calculation
     const taxesAndFeesPercentage = 23;
-    const taxesAndFeesAmount = (discountPrice * taxesAndFeesPercentage) / 100;
-    const totalAmount = discountPrice + taxesAndFeesAmount;
+    const taxesAndFeesAmount = (amountAfterCoupon * taxesAndFeesPercentage) / 100;
+    const totalAmount = amountAfterCoupon + taxesAndFeesAmount;
 
-    // ✅ Response
+    // Rounding helper
+    const round = (num) => Math.round(num * 100) / 100;
+
+    // ✅ Response (Hotel Style)
     return res.status(200).json({
       success: true,
-      data: {
-        cafeDetails: {
-          _id: cafe._id,
-          name: cafe.name,
-          themeCategory: cafe.themeCategory?.name || null,
-          address: cafe.location?.address || null,
-          image: cafe.images?.[0] || null
-        },
-        bookingDetails: {
-          bookingDate,
-          startTime,
-          endTime,
-          durationHours,
-          numberOfTables,
-          numberOfGuests,
-          specialRequests,
-          isWeekend,
-          isPeakHour: isEvening
-        },
-        coupon: couponDetails,
-        paymentSummary: {
-          title: "Payment Information",
-          items: [
-            {
-              label: `${numberOfTables} Table × ${durationHours} Hours`,
-              value: baseSubtotal.toFixed(2),
-              prefix: "₹"
-            },
-            {
-              label: "Weekend / Peak Adjustment",
-              value: ((weekendMultiplier * peakHourMultiplier - 1) * 100).toFixed(1) + "%",
-              type: "surcharge"
-            },
-            {
-              label: "10% Discount",
-              value: `-₹${discountAmount.toFixed(2)}`,
-              type: "discount"
-            },
-            {
-              label: "Discounted Price",
-              value: discountPrice.toFixed(2),
-              prefix: "₹"
-            },
-            {
-              label: "Taxes & Fees (23%)",
-              value: taxesAndFeesAmount.toFixed(2),
-              prefix: "₹"
-            },
-            {
-              label: "Total Amount to Pay",
-              value: totalAmount.toFixed(2),
-              prefix: "₹",
-              bold: true
-            }
-          ],
-          totalAmount: totalAmount.toFixed(2),
-          currency,
-          proceedAction: "Proceed To Pay"
+      message: "Cafe booking preview generated successfully",
+      result: [
+        {
+          cafeDetails: {
+            id: cafe._id,
+            name: cafe.name,
+            themeCategory: cafe.themeCategoryId?.name || null,
+            address: cafe.location?.address || null,
+            image: cafe.images?.[0] || null
+          },
+          bookingDetails: {
+            checkInDate,
+            checkOutDate,
+            timeSlot,
+            adults,
+            children,
+            infants,
+            numberOfRooms,
+            specialRequests
+          },
+          paymentSummary: {
+            title: "Payment Information",
+            items: [
+              {
+                label: `Guests (${totalGuests}) * Rate (\u20B9${baseRatePerGuest})`,
+                value: `\u20B9${round(baseSubtotal).toFixed(2)}`
+              },
+              {
+                label: "Discount",
+                value: `${discountPercentage + (couponDetails ? couponDetails.discountPercent : 0)}%`,
+                color: "blue"
+              },
+              {
+                label: "With Discount",
+                value: `\u20B9${round(amountAfterCoupon).toFixed(2)}`
+              },
+              {
+                label: "Taxes \u0026 Services",
+                value: `\u20B9${round(taxesAndFeesAmount).toFixed(2)}`
+              },
+              {
+                label: "Total Amount of Paid",
+                value: `\u20B9${round(totalAmount).toFixed(2)}`,
+                bold: true
+              }
+            ],
+            totalAmount: round(totalAmount).toFixed(2),
+            currency: "INR",
+            coupon: couponDetails ? {
+              code: couponDetails.code,
+              discountPercent: couponDetails.discountPercent,
+              discountAmount: round(couponDetails.discountAmount)
+            } : null,
+            proceedAction: "Process To Paid"
+          }
         }
-      }
+      ],
+      length: 1
     });
 
   } catch (err) {
@@ -445,49 +598,54 @@ export const previewCafeBooking = async (req, res) => {
   }
 };
 
-
 // Update booking status
 export const updateBookingStatus = async (req, res) => {
   try {
+    const adminId = req.admin?._id;
+    if (!adminId) return res.status(400).json({ success: false, message: "Admin ID not found" });
+
     const { id } = req.params;
-    const { bookingStatus } = req.body;
-    const adminId = req.admin?._id; 
+    const { status, bookingStatus } = req.body;
+    const finalStatus = status || bookingStatus;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid booking ID"
-      });
+    if (!finalStatus) return res.status(400).json({ success: false, message: "Status is required" });
+
+    const validStatuses = ["pending", "Upcoming", "Completed", "Cancelled", "Refunded", "Confirmed"];
+    if (!validStatuses.includes(finalStatus)) {
+      return res.status(400).json({ success: false, message: "Invalid booking status" });
     }
 
-    let validStatuses =  ["Upcoming", "Completed", "Cancelled", "Refunded"];
-
-    if (!bookingStatus || !validStatuses.includes(bookingStatus)) {
-      return res.status(400).json({
-        success: false,
-        message: "Valid booking status is required"
-      });
-    }
-
-    const booking = await cafeBookingModel.findOne({ _id: id, adminId: adminId });
+    const booking = await cafeBookingModel.findOne({ _id: id, adminId });
     if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: "Booking not found"
-      });
+      return res.status(404).json({ success: false, message: "Booking not found or not authorized" });
     }
 
+    const previousStatus = booking.bookingStatus.toLowerCase();
+    const newStatus = finalStatus.toLowerCase();
 
-    const previousStatus = booking.bookingStatus;
-    booking.bookingStatus = bookingStatus;
-
-    if (bookingStatus === 'cancelled') {
-      booking.payment.paymentStatus = 'cancelled';
-    } else if (bookingStatus === 'confirmed' && previousStatus === 'pending') {
-      booking.payment.paymentStatus = 'confirmed';
-      booking.payment.paymentDate = new Date();
+    // If changing to cancelled and it was confirmed/paid, process refund
+    if (newStatus === "cancelled" && previousStatus !== "cancelled") {
+      const isPaid = booking.payment.paymentStatus === "completed" || booking.payment.paymentStatus === "confirmed";
+      if (isPaid) {
+        const amountToRefund = booking.pricing.totalAmount;
+        const user = await userModel.findById(booking.userId);
+        if (user) {
+          user.walletBalance = (user.walletBalance || 0) + amountToRefund;
+          await user.save();
+          const wTxn = new WalletTransactionModel({
+            userId: user._id,
+            amount: amountToRefund,
+            type: "credit",
+            description: `Refund for Cafe Booking (Cancelled by Admin) - ${booking.bookingId || booking._id}`,
+            status: "completed"
+          });
+          await wTxn.save();
+          booking.payment.paymentStatus = "refunded";
+        }
+      }
     }
 
+    booking.bookingStatus = finalStatus;
     await booking.save();
 
     await booking.populate('cafeId', 'name location images themeCategory');
@@ -495,87 +653,87 @@ export const updateBookingStatus = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Booking ${bookingStatus} successfully`,
+      message: `Booking status updated to ${status} successfully`,
       data: booking
     });
 
   } catch (error) {
     console.error("Update Booking Status Error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server Error",
-      error: error.message
-    });
+    return res.status(500).json({ success: false, message: "Server Error", error: error.message });
   }
 };
-
 
 // Update payment status
 export const updatePaymentStatus = async (req, res) => {
   try {
+    const adminId = req.admin?._id;
+    if (!adminId) return res.status(400).json({ success: false, message: "Admin ID not found" });
+
     const { id } = req.params;
-    const {
-      paymentStatus,
-      transactionId,
-      paymentMethod,
-      paymentDate
-    } = req.body;
+    const { status, paymentStatus, transactionId, paymentMethod, paymentDate } = req.body;
+    const finalStatus = status || paymentStatus;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid booking ID"
-      });
+    const validStatuses = ["pending", "confirmed", "cancelled", "completed", "refunded", "failed"];
+    if (!finalStatus || !validStatuses.includes(finalStatus.toLowerCase())) {
+      return res.status(400).json({ success: false, message: "Invalid payment status" });
     }
 
-    let validStatuses = ["pending", "confirmed", "cancelled", "completed", "refunded", "failed"];
-    if (!paymentStatus || !validStatuses.includes(paymentStatus)) {
-      return res.status(400).json({
-        success: false,
-        message: "Valid payment status is required"
-      });
-    }
-
-    const booking = await cafeBookingModel.findById(id);
+    const booking = await cafeBookingModel.findOne({ _id: id, adminId });
     if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: "Booking not found"
-      });
+      return res.status(404).json({ success: false, message: "Booking not found or not authorized" });
     }
 
-    // Update payment details
-    booking.payment.paymentStatus = paymentStatus;
-    if (transactionId) booking.payment.transactionId = transactionId;
-    if (paymentMethod) booking.payment.paymentMethod = paymentMethod;
-    if (paymentDate) {
-      booking.payment.paymentDate = new Date(paymentDate);
-    } else if (paymentStatus === 'confirmed') {
-      booking.payment.paymentDate = new Date();
+    const previousPaymentStatus = booking.payment.paymentStatus.toLowerCase();
+    const newPaymentStatus = finalStatus.toLowerCase();
+
+    // If changing to cancelled and it was previously paid, process refund
+    if (newPaymentStatus === "cancelled" && (previousPaymentStatus === "completed" || previousPaymentStatus === "confirmed")) {
+      const amountToRefund = booking.pricing.totalAmount;
+      const user = await userModel.findById(booking.userId);
+      if (user) {
+        user.walletBalance = (user.walletBalance || 0) + amountToRefund;
+        await user.save();
+        const wTxn = new WalletTransactionModel({
+          userId: user._id,
+          amount: amountToRefund,
+          type: "credit",
+          description: `Refund for Cafe Booking (Payment Cancelled by Admin) - ${booking.bookingId || booking._id}`,
+          status: "completed"
+        });
+        await wTxn.save();
+        booking.payment.paymentStatus = "refunded";
+        booking.bookingStatus = "Cancelled";
+      } else {
+        booking.payment.paymentStatus = newPaymentStatus;
+        booking.bookingStatus = "Cancelled";
+      }
+    } else {
+      booking.payment.paymentStatus = newPaymentStatus;
+      if (transactionId) booking.payment.transactionId = transactionId;
+      if (paymentMethod) booking.payment.paymentMethod = paymentMethod;
+
+      if (newPaymentStatus === "completed" || newPaymentStatus === "confirmed") {
+        booking.bookingStatus = "Confirmed";
+        booking.payment.paymentDate = paymentDate ? new Date(paymentDate) : new Date();
+      } else if (newPaymentStatus === "cancelled" || newPaymentStatus === "failed") {
+        booking.bookingStatus = "Cancelled";
+      }
     }
 
     await booking.save();
-
-    return res.status(200).json({
-      success: true,
-      message: `Payment status updated to ${paymentStatus}`,
-      data: booking
-    });
+    return res.status(200).json({ success: true, message: "Payment status updated successfully", data: booking });
 
   } catch (error) {
     console.error("Update Payment Status Error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server Error",
-      error: error.message
-    });
+    return res.status(500).json({ success: false, message: "Server Error", error: error.message });
   }
 };
 
 // Cancel booking
 export const cancelBooking = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { bookingId } = req.params;
+    const id = bookingId;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
@@ -625,25 +783,46 @@ export const cancelBooking = async (req, res) => {
         message: "Completed bookings cannot be cancelled",
       });
     }
-    let vaildPaymentStatus = ["pending", "confirmed", "cancelled", "completed", "refunded", "failed"];
-    if (!vaildPaymentStatus.includes(booking.payment.paymentStatus)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid payment status"
-      });
-    }
-    // Update booking
+    const isPaid = booking.payment.paymentStatus === "completed" || booking.payment.paymentStatus === "confirmed";
+    const amountToRefund = booking.pricing.totalAmount;
+
+    // Update booking status
     booking.bookingStatus = "Cancelled";
-    if (booking.payment) {
+
+    if (isPaid) {
+      booking.payment.paymentStatus = "refunded";
+
+      // Credit amount back to user's wallet
+      const user = await userModel.findById(booking.userId);
+      if (user) {
+        user.walletBalance = (user.walletBalance || 0) + amountToRefund;
+        await user.save();
+
+        // Record wallet transaction
+        const wTxn = new WalletTransactionModel({
+          userId: booking.userId,
+          amount: amountToRefund,
+          type: "credit",
+          description: `Refund for Cafe Booking (Cancelled by User) - ${booking.bookingId || booking._id}`,
+          status: "completed"
+        });
+        await wTxn.save();
+      }
+    } else {
       booking.payment.paymentStatus = "cancelled";
     }
 
+    booking.cancelledAt = new Date();
     await booking.save();
 
     return res.status(200).json({
       success: true,
-      message: "Booking cancelled successfully",
-      data: booking,
+      message: isPaid ? "Booking cancelled and refund processed to wallet successfully" : "Booking cancelled successfully",
+      data: {
+        bookingId: booking._id,
+        refundAmount: isPaid ? amountToRefund : 0,
+        paymentStatus: booking.payment.paymentStatus
+      }
     });
   } catch (error) {
     console.error("Cancel Booking Error:", error);
@@ -651,123 +830,6 @@ export const cancelBooking = async (req, res) => {
       success: false,
       message: "Server Error",
       error: error.message,
-    });
-  }
-};
-
-
-// Get available time slots for a cafe
-export const getAvailableTimeSlots = async (req, res) => {
-  try {
-    const { cafeId, date } = req.query;
-
-    if (!cafeId || !date) {
-      return res.status(400).json({
-        success: false,
-        message: "Cafe ID and date are required"
-      });
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(cafeId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid cafe ID"
-      });
-    }
-
-    let bookingDate;
-    try {
-      // Try parsing as ISO string (YYYY-MM-DD)
-      if (date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        bookingDate = new Date(date);
-      }
-      // Try parsing as timestamp
-      else if (date.match(/^\d+$/)) {
-        bookingDate = new Date(parseInt(date));
-      }
-      // Try parsing as any other date string
-      else {
-        bookingDate = new Date(date);
-      }
-
-      // Check if date is valid
-      if (isNaN(bookingDate.getTime())) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid date format. Please use YYYY-MM-DD format"
-        });
-      }
-    } catch (dateError) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid date format. Please use YYYY-MM-DD format"
-      });
-    }
-
-    // Normalize date to start of day for comparison
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const normalizedBookingDate = new Date(bookingDate);
-    normalizedBookingDate.setHours(0, 0, 0, 0);
-
-    if (normalizedBookingDate < today) {
-      return res.status(400).json({
-        success: false,
-        message: "Date cannot be in the past"
-      });
-    }
-
-    // Get cafe operating hours
-    const cafe = await cafeModel.findById(cafeId);
-    if (!cafe) {
-      return res.status(404).json({
-        success: false,
-        message: "Cafe not found"
-      });
-    }
-
-    // Define available time slots (you can customize this)
-    const timeSlots = [
-      "09:00-10:00", "10:00-11:00", "11:00-12:00",
-      "12:00-13:00", "13:00-14:00", "14:00-15:00",
-      "15:00-16:00", "16:00-17:00", "17:00-18:00",
-      "18:00-19:00", "19:00-20:00", "20:00-21:00"
-    ];
-
-    // Get booked time slots for the date - FIXED date comparison
-    const bookedSlots = await cafeBookingModel.find({
-      cafeId,
-      bookingDate: {
-        $gte: normalizedBookingDate,
-        $lt: new Date(normalizedBookingDate.getTime() + 24 * 60 * 60 * 1000) // Next day
-      },
-      bookingStatus: { $in: ["pending", "confirmed"] }
-    }).select('timeSlot');
-
-    const bookedTimeSlots = bookedSlots.map(booking => booking.timeSlot);
-
-    // Filter available time slots
-    const availableSlots = timeSlots.filter(slot => !bookedTimeSlots.includes(slot));
-
-    return res.status(200).json({
-      success: true,
-      data: {
-        cafe: cafe.name,
-        date: normalizedBookingDate.toISOString().split('T')[0],
-        availableSlots,
-        bookedSlots: bookedTimeSlots,
-        totalAvailable: availableSlots.length,
-        totalBooked: bookedTimeSlots.length
-      }
-    });
-
-  } catch (error) {
-    console.error("Get Available Time Slots Error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server Error",
-      error: error.message
     });
   }
 };

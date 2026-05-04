@@ -13,8 +13,8 @@ const cafeBookingSchema = new mongoose.Schema(
 
     bookingStatus: {
       type: String,
-      enum: ["Upcoming", "Completed", "Cancelled", "Refunded"],
-      default: "Upcoming",
+      enum: ["pending", "Upcoming", "Confirmed", "Completed", "Cancelled", "Refunded"],
+      default: "pending",
     },
 
     adminId: {
@@ -37,6 +37,15 @@ const cafeBookingSchema = new mongoose.Schema(
 
     bookingDate: {
       type: Date,
+    },
+
+    checkInDate: {
+      type: Date,
+      required: true,
+    },
+
+    checkOutDate: {
+      type: Date,
       required: true,
     },
 
@@ -48,8 +57,27 @@ const cafeBookingSchema = new mongoose.Schema(
 
     numberOfGuests: {
       type: Number,
-      required: true,
       min: 1,
+    },
+
+    adults: {
+      type: Number,
+      default: 1,
+    },
+
+    children: {
+      type: Number,
+      default: 0,
+    },
+
+    infants: {
+      type: Number,
+      default: 0,
+    },
+
+    numberOfRooms: {
+      type: Number,
+      default: 1,
     },
 
     guest: {
@@ -96,9 +124,12 @@ const cafeBookingSchema = new mongoose.Schema(
 
 
 cafeBookingSchema.pre("validate", function (next) {
+  const guests = this.adults + this.children;
+  const numGuests = this.numberOfGuests || guests || 1;
+
   // Only auto-calculate if not already set
   if (!this.pricing.totalGuestRate) {
-    this.pricing.totalGuestRate = this.pricing.perGuestRate * this.numberOfGuests;
+    this.pricing.totalGuestRate = this.pricing.perGuestRate * numGuests;
   }
 
   if (!this.pricing.actualPrice) {

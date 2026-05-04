@@ -55,23 +55,10 @@ const CafeSchema = new mongoose.Schema({
       }
     }
   },
-  themeCategory: {
-    image: {
-      type: String,
-      default: null,
-      validate: {
-        validator: function (v) {
-          return v === null || /^https?:\/\/.+\..+/.test(v);
-        },
-        message: "Invalid image URL"
-      }
-    },
-    name: {
-      type: String,
-      enum: ["Cazy", "Modern", "Rustic", "Vintage", "Industrial", "Minimalist"],
-      default: null,
-      required: true
-    }
+  themeCategoryId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "ThemeCategory",
+    required: [true, "Theme category is required"]
   },
   images: [{
     type: String,
@@ -135,7 +122,7 @@ const CafeSchema = new mongoose.Schema({
       default: 'USD',
       uppercase: true,
       enum: {
-        values: ['USD','INR', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD'],
+        values: ['USD', 'INR', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD'],
         message: '{VALUE} is not a supported currency'
       }
     }

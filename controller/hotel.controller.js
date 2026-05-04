@@ -6,6 +6,7 @@ import { sendBadRequest, sendSuccess, sendError } from "../utils/responseUtils.j
 import log from "../utils/logger.js";
 import { sendNotification } from "../utils/notificatoin.utils.js";
 import hotelBookingModel from "../model/hotel.booking.model.js";
+import mongoose from "mongoose";
 
 export const createNewHotel = async (req, res) => {
   try {
@@ -15,9 +16,8 @@ export const createNewHotel = async (req, res) => {
       address,
       location,
       amenities,
-      priceRange,
-      Rent,
-      rooms,
+      actualPrice,
+      discountPrice,
       ourService,
     } = req.body;
 
@@ -25,34 +25,16 @@ export const createNewHotel = async (req, res) => {
       return sendBadRequest(res, "Hotel name and description are required");
     }
 
-    // Note: Duplicate check is done in processAndUploadImages middleware BEFORE S3 upload
-
-    // ✅ Use images already uploaded by processAndUploadImages middleware
-    // The middleware stores URLs in req.files.hotelImages (array) and req.files.roomImages (object with room indices)
     const hotelImages = req.files?.hotelImages || [];
-    const roomImagesByIndex = req.files?.roomImages || {}; // { "0": [url1, url2], "1": [url3] }
+    const roomImagesByIndex = req.files?.roomImages || {};
 
     if (hotelImages.length === 0) {
       return sendBadRequest(res, "Please upload at least one hotel image");
     }
 
-    // ✅ Parse and attach room images
-    // Map room images by their index (roomImages_0, roomImages_1, etc.)
-    let parsedRooms = [];
-    if (rooms) {
-      parsedRooms = typeof rooms === "string" ? JSON.parse(rooms) : rooms;
-
-      parsedRooms = parsedRooms.map((room, idx) => {
-        const roomIndex = idx.toString();
-        const roomImageUrls = roomImagesByIndex[roomIndex] || [];
-        return { ...room, images: roomImageUrls };
-      });
-    }
-
     const parsedAddress = typeof address === "string" ? JSON.parse(address) : address || {};
     const parsedLocation = typeof location === "string" ? JSON.parse(location) : location || {};
     const parsedAmenities = typeof amenities === "string" ? JSON.parse(amenities) : amenities || [];
-    const parsedPriceRange = typeof priceRange === "string" ? JSON.parse(priceRange) : priceRange || {};
     const parsedOurService = typeof ourService === "string" ? JSON.parse(ourService) : ourService || {};
 
     const hotel = new hotelModel({
@@ -62,15 +44,14 @@ export const createNewHotel = async (req, res) => {
       address: parsedAddress,
       location: parsedLocation,
       amenities: parsedAmenities,
-      priceRange: parsedPriceRange,
-      Rent: Rent || null,
+      actualPrice: Number(actualPrice),
+      discountPrice: Number(discountPrice),
       images: hotelImages,
       ourService: {
         connectVieCall: parsedOurService.connectVieCall || null,
         connectVieMessage: parsedOurService.connectVieMessage || null,
         helpSupport: parsedOurService.helpSupport || null,
       },
-      rooms: parsedRooms,
     });
 
     const savedHotel = await hotel.save();
@@ -86,7 +67,7 @@ export const createNewHotel = async (req, res) => {
     await sendNotification({
       adminId: req.admin?._id,
       title: `New Hotel Created: ${name}`,
-      description: `Hotel created successfully with ${savedHotel.images.length} hotel images and ${savedHotel.rooms.length} rooms.`,
+      description: `Hotel ${name} created successfully with ${savedHotel.images.length} images.`,
       image: savedHotel.images[0] || null,
       type: "broadcast",
     }).catch(err => log.warn("Notification Error:", err.message));
@@ -94,7 +75,7 @@ export const createNewHotel = async (req, res) => {
     return sendSuccess(res, "Hotel created successfully", savedHotel);
   } catch (error) {
     log.error("createNewHotel Error:", error);
-    return sendError(res, 500, "Failed to create hotel", error.message);
+    return sendError(res, "Failed to create hotel", error);
   }
 };
 
@@ -106,13 +87,18 @@ export const getAllHotels = async (req, res) => {
 
   } catch (error) {
     log.error(error);
-    return sendError(res, 500, "Failed to fetch hotels", error);
+    return sendError(res, "Failed to fetch hotels", error);
   }
 }
 
 export const getHotelById = async (req, res) => {
   try {
     const { hotelId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(hotelId)) {
+      return sendBadRequest(res, "Invalid Hotel ID");
+    }
+
     if (!hotelId) return sendError(res, 400, "Hotel ID is required");
 
     const hotel = await hotelModel.findById(hotelId).populate('adminId');
@@ -122,7 +108,7 @@ export const getHotelById = async (req, res) => {
 
   } catch (error) {
     log.error(error);
-    return sendError(res, 500, "Failed to fetch hotel", error);
+    return sendError(res, "Failed to fetch hotel", error);
   }
 }
 
@@ -176,7 +162,7 @@ export const deleteHotels = async (req, res) => {
     return sendSuccess(res, "Hotel deleted successfully", hotel);
   } catch (error) {
     log.error("deleteHotels Error:", error);
-    return sendError(res, 500, "Failed to delete hotel", error.message);
+    return sendError(res, "Failed to delete hotel", error);
   }
 }
 
@@ -473,17 +459,22 @@ export const mainSearchHotels = async (req, res) => {
       _id: { $nin: overlappingBookings },
     };
 
-    if (adults) query["rooms.maxGuests"] = { $gte: Number(adults) };
-    if (rooms) query["rooms"] = { $exists: true, $not: { $size: 0 } };
-
     const hotels = await hotelModel.find(query)
-      .select("name description address images priceRange averageRating amenities rooms")
-      .limit(20) // avoid heavy response
-      .lean(); // better performance
+      .select("name description address images actualPrice discountPrice averageRating amenities")
+      .limit(20)
+      .lean();
 
     return res.status(200).json({
       success: true,
       message: hotels.length ? "Hotels fetched successfully." : "No hotels available.",
+      info: {
+        city,
+        checkInDate,
+        checkOutDate,
+        adults: Number(adults) || 1,
+        children: Number(children) || 0,
+        rooms: Number(rooms) || 1
+      },
       result: hotels,
     });
   } catch (error) {
@@ -498,54 +489,44 @@ export const mainSearchHotels = async (req, res) => {
 export const updateHotel = async (req, res) => {
   try {
     const { hotelId } = req.params;
-    const {
-      name,
-      description,
-      address,
-      location,
-      amenities,
-      priceRange,
-      Rent,
-      rooms,
-      ourService,
-    } = req.body;
+    const updateData = { ...req.body };
 
     const hotel = await hotelModel.findById(hotelId);
-    if (!hotel) return sendError(res, 404, "Hotel not found");
+    if (!hotel) return sendError(res, "Hotel not found", "Hotel ID is invalid");
 
-    // Handle JSON fields
-    if (name) hotel.name = name;
-    if (description) hotel.description = description;
-    if (address) hotel.address = typeof address === "string" ? JSON.parse(address) : address;
-    if (location) hotel.location = typeof location === "string" ? JSON.parse(location) : location;
-    if (amenities) hotel.amenities = typeof amenities === "string" ? JSON.parse(amenities) : amenities;
-    if (priceRange) hotel.priceRange = typeof priceRange === "string" ? JSON.parse(priceRange) : priceRange;
-    if (Rent !== undefined) hotel.Rent = Rent;
-    if (ourService) hotel.ourService = typeof ourService === "string" ? JSON.parse(ourService) : ourService;
-
-    // Handle rooms update
-    if (rooms) {
-      let parsedRooms = typeof rooms === "string" ? JSON.parse(rooms) : rooms;
-      
-      // Ensure rooms have the correct price fields if they are being updated
-      hotel.rooms = parsedRooms.map(room => ({
-        ...room,
-        actualPrice: room.actualPrice ? Number(room.actualPrice) : undefined,
-        discountPrice: room.discountPrice ? Number(room.discountPrice) : undefined
-      }));
+    // Handle JSON parsing for form-data strings
+    if (updateData.address && typeof updateData.address === "string") {
+      updateData.address = JSON.parse(updateData.address);
+    }
+    if (updateData.location && typeof updateData.location === "string") {
+      updateData.location = JSON.parse(updateData.location);
+    }
+    if (updateData.amenities && typeof updateData.amenities === "string") {
+      updateData.amenities = JSON.parse(updateData.amenities);
+    }
+    if (updateData.ourService && typeof updateData.ourService === "string") {
+      updateData.ourService = JSON.parse(updateData.ourService);
     }
 
-    // Handle images if any (from middleware)
+    // Convert numbers
+    if (updateData.actualPrice) updateData.actualPrice = Number(updateData.actualPrice);
+    if (updateData.discountPrice) updateData.discountPrice = Number(updateData.discountPrice);
+
+    // Handle new image uploads
     if (req.files?.hotelImages) {
-      hotel.images = [...(hotel.images || []), ...req.files.hotelImages];
+      updateData.images = [...(hotel.images || []), ...req.files.hotelImages];
     }
 
-    await hotel.save();
+    const updatedHotel = await hotelModel.findByIdAndUpdate(
+      hotelId,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    );
 
-    return sendSuccess(res, "Hotel updated successfully", hotel);
+    return sendSuccess(res, "Hotel updated successfully", updatedHotel);
   } catch (error) {
     log.error("updateHotel Error:", error);
-    return sendError(res, 500, "Failed to update hotel", error.message);
+    return sendError(res, "Failed to update hotel", error);
   }
 };
 

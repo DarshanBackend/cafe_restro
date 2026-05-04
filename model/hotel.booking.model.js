@@ -13,7 +13,7 @@ const hotelBookingSchema = new mongoose.Schema(
 
     bookingStatus: {
       type: String,
-      enum: ["pending", "upcoming", "completed", "cancelled", "refunded"],
+      enum: ["pending", "upcoming", "completed", "cancelled", "refunded", "confirmed"],
       default: "pending",
     },
     adminId: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
@@ -32,7 +32,7 @@ const hotelBookingSchema = new mongoose.Schema(
       default: null
     },
     hotelId: { type: mongoose.Schema.Types.ObjectId, ref: "Hotel", required: true },
-    roomId: { type: mongoose.Schema.Types.ObjectId, ref: "Hotel", required: true },
+    numberOfRooms: { type: Number, default: 1 },
 
     bookingDates: {
       checkInDate: { type: Date, required: true },

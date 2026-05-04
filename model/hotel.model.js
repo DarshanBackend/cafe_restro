@@ -40,16 +40,9 @@ const hotelSchema = new mongoose.Schema(
       lng: Number,
     },
     images: [{ type: String }],
-    rooms: [roomSchema],
+    actualPrice: { type: Number, required: true },  
+    discountPrice: { type: Number, required: true },
     amenities: [{ type: String }],
-    priceRange: {
-      min: Number,
-      max: Number,
-    },
-    Rent: {
-      type: Number,
-      default: null
-    },
     ourService: {
       connectVieCall: { type: String, default: null },
       connectVieMessage: { type: String, default: null },
