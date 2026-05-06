@@ -3,15 +3,17 @@ import * as cheerio from "cheerio";
 import pLimit from "p-limit";
 import { sendError, sendSuccess } from "../utils/responseUtils.js";
 import hotelModel from "../model/hotel.model.js";
+import stayModel from "../model/stay.model.js";
 
-// Enhanced cache configuration with LRU-like behavior
+
 const cityCache = new Map();
 const attractionsCache = new Map();
+const placeDetailCache = new Map();
 const imageCache = new Map();
-const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+const CACHE_TTL = 30 * 60 * 1000;
 const MAX_CACHE_SIZE = 100;
 
-// HTTP client with optimized settings
+
 const http = axios.create({
   timeout: 15000,
   headers: {
@@ -53,7 +55,7 @@ const callOverpass = async (query, timeout = 30000) => {
   throw lastError;
 };
 
-// Cache helper with automatic cleanup
+
 const getCached = (cache, key) => {
   const cached = cache.get(key);
   if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
@@ -64,7 +66,7 @@ const getCached = (cache, key) => {
 };
 
 const setCached = (cache, key, data) => {
-  // LRU: remove oldest if cache is full
+
   if (cache.size >= MAX_CACHE_SIZE) {
     const firstKey = cache.keys().next().value;
     cache.delete(firstKey);
@@ -72,7 +74,7 @@ const setCached = (cache, key, data) => {
   cache.set(key, { data, timestamp: Date.now() });
 };
 
-// Optimized image fetching with caching
+
 const fetchDuckDuckGoImage = async (query) => {
   const cacheKey = `ddg:${query}`;
   const cached = getCached(imageCache, cacheKey);
@@ -130,45 +132,39 @@ const fetchGoogleImage = async (query) => {
   }
 };
 
-// Optimized parallel image fetching with early termination
+
 const fetchMultipleImagesForPlace = async (placeName, maxImages = 3) => {
   const cacheKey = `images:${placeName}:${maxImages}`;
   const cached = getCached(imageCache, cacheKey);
   if (cached) return cached;
 
   try {
-    const timeout = 2500; // Reduced to 2.5 seconds
+    const timeout = 5000;
     const sources = [
-      () => fetchBingImage(placeName),      // Bing often fastest
+      () => fetchBingImage(placeName),
       () => fetchDuckDuckGoImage(placeName),
       () => fetchGoogleImage(placeName)
     ];
 
     const images = [];
-    const activePromises = [];
 
-    // Race-based fetching: stop when we have enough images
+
     for (const fetchFn of sources) {
       if (images.length >= maxImages) break;
 
-      const promise = Promise.race([
-        fetchFn(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeout))
-      ]).then(img => {
+      try {
+        const img = await Promise.race([
+          fetchFn(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeout))
+        ]);
+
         if (img && img.startsWith('http') && !images.includes(img)) {
           images.push(img);
         }
-        return img;
-      }).catch(() => null);
-
-      activePromises.push(promise);
-
-      // Quick check: if we already have enough, don't wait
-      if (images.length >= maxImages) break;
+      } catch (err) {
+        continue;
+      }
     }
-
-    // Wait for remaining promises or until we have enough
-    await Promise.allSettled(activePromises);
 
     const result = images.slice(0, maxImages);
     if (result.length > 0) {
@@ -181,13 +177,13 @@ const fetchMultipleImagesForPlace = async (placeName, maxImages = 3) => {
   }
 };
 
-// Backward compatibility
+
 const fetchOptimizedImage = async (query) => {
   const images = await fetchMultipleImagesForPlace(query, 1);
   return images.length > 0 ? images[0] : null;
 };
 
-// Streamlined Overpass query with caching
+
 const fetchOptimizedAttractions = async (cityName) => {
   const cached = getCached(attractionsCache, cityName);
   if (cached) return cached;
@@ -221,7 +217,7 @@ const fetchOptimizedAttractions = async (cityName) => {
         const lon = el.center?.lon || el.lon;
         if (!lat || !lon) return null;
 
-        // Optimized scoring
+
         let score = 0;
         if (el.tags?.tourism === 'attraction') score += 3;
         if (el.tags?.historic) score += 2;
@@ -237,7 +233,7 @@ const fetchOptimizedAttractions = async (cityName) => {
       })
       .filter(Boolean)
       .sort((a, b) => b.score - a.score)
-      .slice(0, 25); // Increased for better selection
+      .slice(0, 25);
 
     setCached(attractionsCache, cityName, attractions);
     return attractions;
@@ -247,93 +243,52 @@ const fetchOptimizedAttractions = async (cityName) => {
   }
 };
 
-// Optimized Google Maps URL
+
 const createEnhancedGoogleMapsUrl = (lat, lng, name = "") => {
   const encodedName = encodeURIComponent(name);
   return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}&query_place_id=${encodedName}`;
 };
 
-const STATIC_COUNTRIES = [
-  { name: "USA", code: "US" }, { name: "Canada", code: "CA" }, { name: "UAE", code: "AE" },
-  { name: "India", code: "IN" }, { name: "Brazil", code: "BR" }, { name: "United Kingdom", code: "GB" },
-  { name: "Australia", code: "AU" }, { name: "Germany", code: "DE" }, { name: "France", code: "FR" },
-  { name: "Japan", code: "JP" }, { name: "Singapore", code: "SG" }, { name: "Italy", code: "IT" },
-  { name: "Spain", code: "ES" }, { name: "Netherlands", code: "NL" }, { name: "Switzerland", code: "CH" }
-];
 
-// Optimized getAllCountries with caching
+
 export const getAllCountries = async (req, res) => {
-  const cached = getCached(cityCache, 'all_countries');
-  if (cached) {
-    return sendSuccess(res, "All countries fetched successfully (cached)", cached);
-  }
-
   try {
-    const query = `
-      [out:json][timeout:30];
-      node["place"="country"];
-      out tags;
-    `;
 
-    let data;
-    try {
-      data = await callOverpass(query, 20000); // Shorter timeout for faster fallback
-    } catch (overpassError) {
-      console.warn("Overpass failed, using static fallback countries");
-      setCached(cityCache, 'all_countries', STATIC_COUNTRIES);
-      return sendSuccess(res, "All countries fetched successfully (fallback)", STATIC_COUNTRIES);
-    }
+    const countries = await hotelModel.distinct("address.country");
+    const allCountries = countries.filter(Boolean).map(name => ({ name }));
 
-    const countries = (data.elements || [])
-      .map((el) => ({
-        name: el.tags?.name || el.tags?.["name:en"],
-        code: el.tags?.["ISO3166-1"] || el.tags?.["ISO3166-1:alpha2"] || null,
-      }))
-      .filter((c) => c.name);
-
-    // If Overpass returned nothing, use fallback
-    const result = countries.length > 0 ? countries : STATIC_COUNTRIES;
-
-    setCached(cityCache, 'all_countries', result);
-    return sendSuccess(res, "All countries fetched successfully", result);
+    return sendSuccess(res, "Countries fetched successfully", allCountries);
   } catch (error) {
-    console.error("Error fetching countries:", error.message);
-    // Absolute final fallback
-    return sendSuccess(res, "All countries fetched successfully (emergency fallback)", STATIC_COUNTRIES);
+    console.error("Error fetching database countries:", error);
+    return sendError(res, "Failed to fetch countries from database", error.message);
   }
 };
 
-// Optimized getCityByCountry with caching
+
 export const getCityByCountry = async (req, res) => {
   try {
     const { country } = req.params;
-    const cacheKey = `cities:${country}`;
 
-    const cached = getCached(cityCache, cacheKey);
-    if (cached) {
-      return sendSuccess(res, "Cities fetched successfully (cached)", cached);
-    }
 
-    const query = `
-      [out:json][timeout:120];
-      area["name"="${country}"]->.a;
-      node["place"="city"](area.a);
-      out tags;
-    `;
+    const hotelCities = await hotelModel.distinct("address.city", { 
+      "address.country": { $regex: new RegExp(`^${country}$`, "i") } 
+    });
+    const allCities = hotelCities.filter(Boolean);
 
-    const data = await callOverpass(query, 120000);
-    const elements = data.elements || [];
-    const cityNames = elements.map(e => e.tags?.name).filter(Boolean);
 
-    setCached(cityCache, cacheKey, cityNames);
-    return sendSuccess(res, "Cities fetched successfully", cityNames);
+    const cityData = await Promise.all(allCities.map(async (name) => {
+      const image = await fetchOptimizedImage(`${name} city ${country} tourism`);
+      return { name, image };
+    }));
+
+    return sendSuccess(res, "Cities fetched successfully", cityData);
   } catch (error) {
-    console.error("Error fetching cities:", error.message);
-    return sendError(res, "Error while fetching cities by country", error);
+    console.error("Error fetching database cities:", error.message);
+    return sendError(res, "Error while fetching cities from database", error.message);
   }
 };
 
-// Highly optimized bestPlaceByCity
+
 export const bestPlaceByCity = async (req, res) => {
   const { cityName } = req.params;
 
@@ -341,7 +296,7 @@ export const bestPlaceByCity = async (req, res) => {
     return res.status(400).json({ error: "Invalid city name" });
   }
 
-  // Check cache
+
   const cached = getCached(cityCache, cityName);
   if (cached) {
     return sendSuccess(res, "Best places fetched successfully (cached)", cached);
@@ -352,15 +307,52 @@ export const bestPlaceByCity = async (req, res) => {
   try {
     res.set("X-Response-Type", "partial");
 
-    const attractions = await fetchOptimizedAttractions(cityName);
-    if (!attractions.length) {
-      return res.status(404).json({ error: "No attractions found for this city" });
-    }
 
-    // Increased concurrency for faster processing
+    const [dbHotels, dbStays] = await Promise.all([
+      hotelModel.find({ "address.city": new RegExp(cityName, "i") }).lean(),
+      stayModel.find({ city: new RegExp(cityName, "i") }).lean()
+    ]);
+
+    const dbResults = [
+      ...dbHotels.map(h => ({
+        id: h._id,
+        type: "hotel",
+        name: h.name,
+        locationName: h.address?.country || "Global",
+        cityName: h.address?.city,
+        rating: h.averageRating || 0,
+        latitude: h.location?.lat,
+        longitude: h.location?.lng,
+        images: h.images || [],
+        primaryImage: h.images?.[0] || null,
+        description: h.description,
+        isDatabaseEntry: true
+      })),
+      ...dbStays.map(s => ({
+        id: s._id,
+        type: "stay",
+        name: s.name,
+        locationName: s.country || "India",
+        cityName: s.city,
+        rating: s.rating || 4.5,
+        latitude: null,
+        longitude: null,
+        images: s.images || [],
+        primaryImage: s.images?.[0] || null,
+        description: s.description,
+        isDatabaseEntry: true
+      }))
+    ];
+
+    results.push(...dbResults);
+
+
+    const attractions = await fetchOptimizedAttractions(cityName);
+
+
     const limit = pLimit(5);
     const BATCH_SIZE = 8;
-    const TARGET_RESULTS = 10;
+    const TARGET_RESULTS = 15;
 
     for (let i = 0; i < attractions.length && results.length < TARGET_RESULTS; i += BATCH_SIZE) {
       const batch = attractions.slice(i, i + BATCH_SIZE);
@@ -368,22 +360,30 @@ export const bestPlaceByCity = async (req, res) => {
       const batchTasks = batch.map((attr) =>
         limit(async () => {
           try {
-            // Fetch fewer images but faster
+
+            if (results.some(r => r.name.toLowerCase() === attr.name.toLowerCase())) return null;
+
+
             const images = await fetchMultipleImagesForPlace(attr.name, 2);
             if (!images.length) return null;
 
+
+            const country = attr.tags?.["addr:country"] || attr.tags?.["is_in:country"] || "";
+
             return {
               name: attr.name,
-              locationName: cityName,
+              locationName: country || cityName,
+              cityName: cityName,
               rating: 4.5,
               latitude: attr.lat,
               longitude: attr.lon,
               images,
               primaryImage: images[0],
-              description: null,
-              type: attr.tags?.tourism || attr.tags?.historic || attr.tags?.amenity,
+              description: attr.tags?.description || null,
+              type: attr.tags?.tourism || attr.tags?.historic || attr.tags?.amenity || "attraction",
               imageCount: images.length,
               mapUrl: createEnhancedGoogleMapsUrl(attr.lat, attr.lon, attr.name),
+              isDatabaseEntry: false
             };
           } catch (error) {
             return null;
@@ -394,7 +394,6 @@ export const bestPlaceByCity = async (req, res) => {
       const batchResults = (await Promise.all(batchTasks)).filter(Boolean);
       results.push(...batchResults);
 
-      // Early exit if we have enough
       if (results.length >= TARGET_RESULTS) break;
     }
 
@@ -402,7 +401,7 @@ export const bestPlaceByCity = async (req, res) => {
       return res.status(404).json({ error: "No attractions with images found" });
     }
 
-    // Cache the results
+
     setCached(cityCache, cityName, results);
 
     return sendSuccess(res, "Best places fetched successfully", results);
@@ -417,7 +416,7 @@ export const bestPlaceByCity = async (req, res) => {
   }
 };
 
-// Optimized bestPlaceByCityBasic
+
 export const bestPlaceByCityBasic = async (req, res) => {
   const { cityName } = req.params;
 
@@ -452,89 +451,6 @@ export const bestPlaceByCityBasic = async (req, res) => {
   }
 };
 
-export const getPlaceDeatil = async (req, res) => {
-  const { placeName } = req.params;
-
-  if (!placeName || placeName.length < 2) {
-    return res.status(400).json({ error: "Invalid place name" });
-  }
-
-  try {
-    const query = `
-      [out:json][timeout:25];
-      (
-        node["name"="${placeName}"];
-        way["name"="${placeName}"];
-        relation["name"="${placeName}"];
-      );
-      out center;
-    `;
-
-    const data = await callOverpass(query, 25000);
-
-    if (!data.elements || !data.elements.length) {
-      return res.status(404).json({ error: "Place not found in Overpass" });
-    }
-
-    const place = data.elements[0];
-    const lat = place.lat || place.center?.lat;
-    const lon = place.lon || place.center?.lon;
-    const tags = place.tags || {};
-
-    const images = await fetchMultipleImagesForPlace(placeName, 5);
-    const mapUrl = createEnhancedGoogleMapsUrl(lat, lon, placeName);
-
-    // Fetch Nearby Hotels & Stays (within ~50km if possible, or just same city)
-    const city = tags["addr:city"] || tags["is_in:city"];
-    const country = tags["addr:country"] || tags["is_in:country"];
-
-    let nearbyHotels = [];
-    if (lat && lon) {
-      // Basic bounding box search for nearby hotels (+/- 0.5 degrees ~50km)
-      nearbyHotels = await hotelModel.find({
-        "location.lat": { $gte: lat - 0.5, $lte: lat + 0.5 },
-        "location.lng": { $gte: lon - 0.5, $lte: lon + 0.5 }
-      }).limit(5).lean();
-    }
-
-    const result = {
-      name: tags.name || placeName,
-      locationName: country || "",
-      rating: 4.5, // Default placeholder rating
-      description:
-        tags.wikipedia ||
-        tags.description ||
-        tags.tourism ||
-        "No description available.",
-      latitude: lat,
-      longitude: lon,
-      type: tags.tourism || tags.amenity || "attraction",
-      images,
-      primaryImage: images[0] || null,
-      imageCount: images.length,
-      mapUrl,
-      nearbyHotels: nearbyHotels.map(h => ({
-        id: h._id,
-        name: h.name,
-        image: h.images?.[0] || null,
-        address: h.address?.street + ", " + h.address?.city + ", " + h.address?.country,
-        price: h.discountPrice || h.actualPrice,
-        rating: h.averageRating || 4.0
-      })),
-      rawTags: tags
-    };
-
-    return res.json({
-      success: true,
-      message: "Place detail fetched successfully",
-      result,
-    });
-  } catch (error) {
-    console.error("Place detail error:", error.message);
-    res.status(500).json({ success: false, message: "Failed to fetch place detail" });
-  }
-};
-
 export const getHotelByCity = async (req, res) => {
   try {
     const { city } = req.params;
@@ -547,14 +463,26 @@ export const getHotelByCity = async (req, res) => {
       });
     }
 
-    const hotels = await hotelModel.find({
-      "address.city": { $regex: new RegExp(city, "i") },
-    });
+    const hotels = await hotelModel.find({ "address.city": new RegExp(city, "i") }).lean();
 
-    return sendSuccess(res, `Hotels found in ${city}`, hotels)
+    const formattedResults = hotels.map(h => ({
+      id: h._id,
+      type: "hotel",
+      name: h.name,
+      locationName: h.address?.country || "Global",
+      cityName: h.address?.city,
+      rating: h.averageRating || 0,
+      image: h.images?.[0] || null,
+      address: `${h.address?.street || ''}, ${h.address?.city || ''}`.replace(/^, |, $/g, '').trim(),
+      price: h.discountPrice || h.actualPrice,
+      priceLabel: "Per Night"
+    }));
+
+    return sendSuccess(res, `Hotels found in ${city}`, formattedResults);
 
   } catch (error) {
-    console.error("Error while fetching hotels by city:", error);
-    return sendError(res, "Error while fetching hotels by city", error);
+    console.error("Error while fetching properties by city:", error);
+    return sendError(res, "Error while fetching properties by city", error.message);
   }
 };
+

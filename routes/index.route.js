@@ -15,7 +15,8 @@ import { cancelBooking, createCafeBooking, getBookingById, getCafeBookings, getU
 import { createNewRestaurant, deleteRestaurant, filterRestaurants, getAllRestos, getSingleRestro, restroChangeStatus, searchRestaurants, updateRestaurant, addRestroImages, removeRestroImage } from '../controller/restro.controller.js';
 import { validateRestroDuplicate } from '../middleware/validateRestroDuplicate.js';
 import { sendBadRequest, sendError, sendSuccess } from '../utils/responseUtils.js';
-import { bestPlaceByCity, bestPlaceByCityBasic, getAllCountries, getCityByCountry, getHotelByCity, getPlaceDeatil } from '../controller/activity.controller.js';
+import { cancelStayBooking, createStayBooking, getAdminStayBookings, getStayBookingById, getStayBookingStatistics, getUserStayBookings, previewStayBooking, stayCheckIn, stayCheckOut, updateStayBookingStatus, updateStayPaymentStatus } from '../controller/stay.booking.controller.js';
+import { getAllCountries, getCityByCountry, getHotelByCity } from '../controller/activity.controller.js';
 import { addReview, deleteReview, getAllReviews, getBusinessReviews, getUserReviews, updateReview } from '../controller/review.controller.js';
 import { cancelRestaurantBooking, createRestaurantBooking, getRestaurantBookings, getUserRestaurantBookings, updateRestaurantBookingStatus, updateRestaurantPaymentStatus, previewRestroBooking, getRestaurantBookingById } from '../controller/restro.booking.controller.js';
 import { createHall, deleteHall, getAllHalls, getHallById, getPopularHalls, getPreviewBillingOfHall, updateHall } from '../controller/hall.controller.js';
@@ -29,8 +30,10 @@ import { getMyAllBookings, getMyRefundBooking } from '../controller/payments.con
 import { downloadBookingInvoice } from '../controller/invoice.controller.js';
 import { getTrendingDestinations, WhatsNew, getCoffeeDates, getBrowseByPropertyTypes, getSpecialOffers, getLuxuryStays } from '../controller/home.controller.js';
 import { createNotification, deleteNotification, getAllNotifications, getMyNotifications, getNotificationById, updateNotification } from '../controller/notification.controller.js';
-import { createStay, deleteStay, getAllStays, getStayById, updateStay } from '../controller/stay.controller.js';
+import { createStay, deleteStay, getAllStays, getAdminStays, getStayById, updateStay } from '../controller/stay.controller.js';
 import { createThemeCategory, deleteThemeCategory, getAllThemeCategories, getThemeCategory, updateThemeCategory } from '../controller/themeCategory.controller.js';
+import { getMyBookingsUnified } from '../controller/my.bookings.controller.js';
+
 
 
 
@@ -215,10 +218,7 @@ indexRouter.get('/admin/getHallBookingById/:id', AdminAuth, getHallBookingById);
 // 1. get all vistion places
 indexRouter.get("/allCountries", getAllCountries)
 indexRouter.get("/getCityByCountry/:country", getCityByCountry);
-indexRouter.get("/bestPlaceByCity/:cityName", bestPlaceByCity);
-indexRouter.get("/bestPlaceByCityBasic/:cityName", bestPlaceByCityBasic);
-indexRouter.get("/getPlaceDeatil/:placeName", getPlaceDeatil)
-indexRouter.get("/getHotelByCity/:city", getHotelByCity)
+indexRouter.get("/getHotelByCity/:city", getHotelByCity);
 indexRouter.get("/searchHotels", searchHotels)
 indexRouter.get("/mainSearchHotels", mainSearchHotels)
 
@@ -252,6 +252,8 @@ indexRouter.delete("/deleteTour/:id", deleteTour);
 
 //payemnt and all booking in single api not model created!!
 indexRouter.get("/allBookings", UserAuth, getMyAllBookings)
+indexRouter.get("/myBookings/unified", UserAuth, getMyBookingsUnified);
+
 indexRouter.get("/downloadInvoice/:id", UserAuth, downloadBookingInvoice);
 indexRouter.get("/getMyRefundedBooking", UserAuth, getMyRefundBooking)
 
@@ -283,14 +285,29 @@ indexRouter.put("/updateOffer/:id", AdminAuth, upload.single("backgroundImage"),
 indexRouter.delete("/deleteOffer/:id", AdminAuth, deleteOffer);
 indexRouter.patch("/toggleOfferStatus/:id", AdminAuth, toggleOfferStatus);
 
-indexRouter.post("/createStay", upload.fields([{ name: "stayImage", maxCount: 1 }]), AdminAuth, createStay);
-indexRouter.put("/updateStay/:id", AdminAuth, upload.fields([{ name: "stayImage", maxCount: 1 }]), updateStay);
+// ─── Hourly Stay – Admin CRUD ──────────────────────────────────────────────
+indexRouter.post("/createStay", AdminAuth, upload.fields([{ name: "stayImage", maxCount: 5 }, { name: "images", maxCount: 5 }]), createStay);
+indexRouter.put("/updateStay/:id", AdminAuth, upload.fields([{ name: "stayImage", maxCount: 5 }, { name: "images", maxCount: 5 }]), updateStay);
 indexRouter.delete("/deleteStay/:id", AdminAuth, deleteStay);
-// indexRouter.get("/getAdminStays", AdminAuth, getAdminStays);
+indexRouter.get("/getAdminStays", AdminAuth, getAdminStays);
 
-// ----------------- USER ROUTES ----------------- //
-indexRouter.get("/getAllStays", UserAuth, getAllStays);
-indexRouter.get("/getStayById/:id", UserAuth, getStayById);
+// ─── Hourly Stay – Admin Bookings ──────────────────────────────────────────
+indexRouter.get("/admin/stayBookings", AdminAuth, getAdminStayBookings);
+indexRouter.get("/admin/stayBookingStatistics", AdminAuth, getStayBookingStatistics);
+indexRouter.get("/admin/getStayBookingById/:id", AdminAuth, getStayBookingById);
+indexRouter.patch("/updateStayBookingStatus/:id", AdminAuth, updateStayBookingStatus);
+indexRouter.patch("/updateStayPaymentStatus/:id", AdminAuth, updateStayPaymentStatus);
+indexRouter.patch("/admin/stay/check-in/:id", AdminAuth, stayCheckIn);
+indexRouter.patch("/admin/stay/check-out/:id", AdminAuth, stayCheckOut);
+
+// ─── Hourly Stay – User Routes ─────────────────────────────────────────────
+indexRouter.get("/getAllStays", getAllStays);
+indexRouter.get("/getStayById/:id", getStayById);
+indexRouter.post("/stay/preview-booking/:stayId", UserAuth, previewStayBooking);
+indexRouter.post("/createStayBooking/:stayId", UserAuth, createStayBooking);
+indexRouter.get("/my-stay-bookings", UserAuth, getUserStayBookings);
+indexRouter.get("/getStayBookingById/:id", UserAuth, getStayBookingById);
+indexRouter.patch("/cancelStayBooking/:id", UserAuth, cancelStayBooking);
 
 
 
