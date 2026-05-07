@@ -6,6 +6,8 @@ import WalletTransactionModel from "../model/wallet.transaction.model.js";
 import coupanModel from "../model/coupan.model.js";
 import { sendBadRequest, sendError, sendNotFound, sendSuccess } from "../utils/responseUtils.js";
 import { v4 as uuidv4 } from "uuid";
+import { sendNotification } from "../utils/notification.utils.js";
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPER: parse "HH:MM" → minutes since midnight
@@ -308,6 +310,15 @@ export const createStayBooking = async (req, res) => {
       booking.payment.transactionId = wTxn._id.toString();
       await booking.save();
     }
+
+    await sendNotification({
+      userId,
+      title: `Stay Booking Confirmed! 🏨`,
+      message: `Your hourly stay at ${stay.name} on ${date} from ${startTime} to ${endTime} is confirmed. Booking ID: ${booking.bookingId}`,
+      image: stay.images[0] || null,
+      type: "STAY_BOOKING",
+      reference: { bookingId: booking._id, stayId: stay._id }
+    }).catch((err) => console.error("Notification Error:", err.message));
 
     await booking.populate("stayId", "name images address city");
 

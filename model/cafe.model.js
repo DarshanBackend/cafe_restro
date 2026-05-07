@@ -69,8 +69,8 @@ const CafeSchema = new mongoose.Schema({
       message: "Invalid image URL"
     }
   }],
-  reviews: [reviewSchema],
   averageRating: { type: Number, default: 0 },
+  reviewCount: { type: Number, default: 0 },
   popular: {
     type: Boolean,
     default: false

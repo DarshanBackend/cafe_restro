@@ -5,7 +5,8 @@ import { sendBadRequest, sendNotFound } from "../utils/responseUtils.js";
 import { v4 as uuidv4 } from "uuid";
 import log from "../utils/logger.js";
 import coupanModel from "../model/coupan.model.js";
-import { sendNotification } from "../utils/notificatoin.utils.js";
+import { sendNotification } from "../utils/notification.utils.js";
+
 import userModel from "../model/user.model.js";
 import WalletTransactionModel from "../model/wallet.transaction.model.js";
 import Stripe from "stripe";
@@ -213,15 +214,15 @@ export const createCafeBooking = async (req, res) => {
 
     const savedBooking = await newBooking.save();
 
-    // Notification
     await sendNotification({
-      adminId: cafe.createdBy,
-      title: `New Cafe Booking Created`,
-      description: `Booking ID: ${savedBooking.bookingId}\nCafe: ${cafe.name}\nSlot: ${timeSlot}`,
-      image: cafe.images[0] || null,
-      type: "single",
       userId,
+      title: `Booking Confirmed! ☕`,
+      message: `Your booking for ${cafe.name} on ${checkInDate} at ${timeSlot} has been successfully created. Booking ID: ${savedBooking.bookingId}`,
+      image: cafe.images[0] || null,
+      type: "CAFE_BOOKING",
+      reference: { bookingId: savedBooking._id, cafeId: cafe._id }
     }).catch((err) => console.error("Notification Error:", err.message));
+
 
     // Wallet Payment Processing
     if (normalizedPaymentMethod === "Wallet") {

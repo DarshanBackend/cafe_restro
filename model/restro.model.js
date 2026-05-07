@@ -66,8 +66,8 @@ const restaurantSchema = new mongoose.Schema(
     amenities: [{ type: String }],
     services: [{ type: String }],
     images: [{ type: String }],
-    reviews: [reviewSchema],
     averageRating: { type: Number, default: 0 },
+    reviewCount: { type: Number, default: 0 },
 
     popular: {
       type: Boolean,

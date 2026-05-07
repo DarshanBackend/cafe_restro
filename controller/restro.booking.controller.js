@@ -5,7 +5,8 @@ import { sendBadRequest, sendNotFound, sendSuccess } from "../utils/responseUtil
 import { v4 as uuidv4 } from "uuid";
 import log from "../utils/logger.js";
 import coupanModel from "../model/coupan.model.js";
-import { sendNotification } from "../utils/notificatoin.utils.js";
+import { sendNotification } from "../utils/notification.utils.js";
+
 import userModel from "../model/user.model.js";
 import WalletTransactionModel from "../model/wallet.transaction.model.js";
 import Stripe from "stripe";
@@ -192,13 +193,14 @@ export const createRestaurantBooking = async (req, res) => {
     const savedBooking = await newBooking.save();
 
     await sendNotification({
-      adminId: restaurant.ownerId,
-      title: `New Restaurant Booking Created`,
-      description: `Booking ID: ${savedBooking.bookingId}\nRestaurant: ${restaurant.name}\nSlot: ${timeSlot}`,
-      image: restaurant.images[0] || null,
-      type: "single",
       userId,
+      title: `Booking Confirmed! 🍽️`,
+      message: `Your booking for ${restaurant.name} on ${checkInDate} at ${timeSlot} has been successfully created. Booking ID: ${savedBooking.bookingId}`,
+      image: restaurant.images[0] || null,
+      type: "RESTAURANT_BOOKING",
+      reference: { bookingId: savedBooking._id, restaurantId: restaurant._id }
     }).catch((err) => console.error("Notification Error:", err.message));
+
 
     if (normalizedPaymentMethod === "Wallet") {
       dbUser.walletBalance -= totalAmount;

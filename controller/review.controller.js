@@ -1,340 +1,319 @@
 import mongoose from "mongoose";
 import reviewModel, { BUSINESS_TYPES } from "../model/review.model.js";
-import { sendSuccess, sendError } from "../utils/responseUtils.js";
+import { uploadToS3, deleteFromS3 } from "../middleware/uploadS3.js";
+import { sendSuccess, sendError, sendNotFound, sendBadRequest } from "../utils/responseUtils.js";
+import log from "../utils/logger.js";
 
-// Helper function to update business reviews and calculate average
-const updateBusinessReviews = async (businessType, businessId, userId, rating, comment) => {
-  const businessConfig = Object.values(BUSINESS_TYPES).find(config => config.type === businessType);
-
-  if (!businessConfig) {
-    throw new Error(`Invalid business type: ${businessType}`);
-  }
-
-  // First, get the current business to check if reviews array exists
-  const currentBusiness = await businessConfig.model.findById(businessId);
-
-  // Create review object
-  const newReview = {
-    user: userId,
-    rating,
-    comment,
-    createdAt: new Date(),
-  };
-
-  // Initialize reviews array if it doesn't exist
-  const updateData = {
-    $push: { reviews: newReview }
-  };
-
-  // If reviews array doesn't exist, set it instead of pushing
-  if (!currentBusiness.reviews) {
-    updateData.$set = { reviews: [newReview] };
-    delete updateData.$push;
-  }
-
-  // Update business with review
-  const updatedBusiness = await businessConfig.model.findByIdAndUpdate(
-    businessId,
-    updateData,
-    { new: true }
-  );
-
-  // Calculate and update average rating - safely handle undefined reviews
-  const reviewsArray = updatedBusiness.reviews || [];
-  const allRatings = reviewsArray.map(r => r.rating);
-
-  let averageRating = 0;
-  if (allRatings.length > 0) {
-    averageRating = allRatings.reduce((sum, val) => sum + val, 0) / allRatings.length;
-  }
-
-  updatedBusiness.averageRating = Number(averageRating.toFixed(1));
-  await updatedBusiness.save();
-
-  return updatedBusiness;
+// Helper to get rating text
+const getRatingText = (rating) => {
+    switch (Number(rating)) {
+        case 1: return "Terrible";
+        case 2: return "Bad";
+        case 3: return "Okay";
+        case 4: return "Good";
+        case 5: return "Great";
+        default: return "No Rating";
+    }
 };
 
-// Helper to update business average rating after review modification
-const updateBusinessAverageRating = async (businessType, businessId) => {
-  const businessConfig = Object.values(BUSINESS_TYPES).find(config => config.type === businessType);
+// Helper to update business ratings in its own model
+const updateBusinessRatingStats = async (businessType, businessId) => {
+    const businessConfig = Object.values(BUSINESS_TYPES).find(config => config.type === businessType);
+    if (!businessConfig) return;
 
-  const activeReviews = await reviewModel.find({
-    businessId,
-    businessType,
-    isActive: true
-  });
+    const stats = await reviewModel.getBusinessRatingStats(businessId, businessType);
 
-  const business = await businessConfig.model.findById(businessId);
-
-  if (activeReviews.length === 0) {
-    business.averageRating = 0;
-    business.reviews = [];
-  } else {
-    const averageRating = activeReviews.reduce((sum, review) => sum + review.rating, 0) / activeReviews.length;
-    business.averageRating = Number(averageRating.toFixed(1));
-
-    // Update reviews array in business document
-    business.reviews = activeReviews.map(review => ({
-      user: review.userId,
-      rating: review.rating,
-      comment: review.comment,
-      createdAt: review.createdAt
-    }));
-  }
-
-  await business.save();
-  return business;
+    await businessConfig.model.findByIdAndUpdate(businessId, {
+        averageRating: stats.averageRating,
+        reviewCount: stats.totalReviews
+    });
 };
 
 export const addReview = async (req, res) => {
-  try {
-    const { _id: userId } = req.user;
-    const { businessId } = req.params;
-    const { rating, comment, businessType: requestedType } = req.body; // client can send expected type (e.g. "hotel", "cafe")
+    try {
+        const userId = req.user?._id;
+        const { businessId } = req.params;
+        const { rating, comment, businessType } = req.body;
 
-    // Basic validations
-    if (!mongoose.Types.ObjectId.isValid(businessId)) {
-      return sendError(res, "Invalid business ID.");
-    }
-
-    if (!rating || !comment) {
-      return sendError(res, "Rating and comment are required.");
-    }
-
-    if (rating < 1 || rating > 5) {
-      return sendError(res, "Rating must be between 1 and 5.");
-    }
-
-    if (!requestedType) {
-      return sendError(res, "Business type is required.");
-    }
-
-    const validType = BUSINESS_TYPES[requestedType];
-    if (!validType) {
-      return sendError(res, "Invalid business type provided.");
-    }
-
-    // Find business dynamically (and validate type)
-    const foundBusiness = await validType.model.findById(businessId);
-
-    if (!foundBusiness) {
-      // Business not found in given type — check if exists in another type to catch mismatch
-      for (const [key, config] of Object.entries(BUSINESS_TYPES)) {
-        if (key !== requestedType) {
-          const existsElsewhere = await config.model.findById(businessId);
-          if (existsElsewhere) {
-            return sendError(
-              res,
-              `Provided ID belongs to a different business type (${config.type}), not ${requestedType}.`
-            );
-          }
+        if (!mongoose.Types.ObjectId.isValid(businessId)) {
+            return sendBadRequest(res, "Invalid business ID");
         }
-      }
-      return sendError(res, "No matching business found for given ID.");
+
+        if (!rating || isNaN(rating) || rating < 1 || rating > 5) {
+            return sendBadRequest(res, "Valid rating (1-5) is required");
+        }
+
+        const validType = Object.values(BUSINESS_TYPES).find(config => config.type === businessType);
+        if (!validType) {
+            return sendBadRequest(res, "Invalid business type");
+        }
+
+        // Check if business exists
+        const business = await validType.model.findById(businessId);
+        if (!business) return sendNotFound(res, "Business not found");
+
+        // Check for duplicate review
+        const existingReview = await reviewModel.findOne({
+            userId,
+            businessId,
+            businessType,
+            isActive: true
+        });
+
+        if (existingReview) {
+            return sendBadRequest(res, "You have already reviewed this business");
+        }
+
+        // Handle Media Uploads
+        const media = [];
+        if (req.files && req.files.media) {
+            const files = Array.isArray(req.files.media) ? req.files.media : [req.files.media];
+            for (const file of files) {
+                const url = await uploadToS3(file.buffer, file.originalname, file.mimetype, "reviews");
+                const key = url.split(".amazonaws.com/")[1];
+                media.push({
+                    url,
+                    key,
+                    type: file.mimetype.startsWith("video/") ? "video" : "image",
+                    uploadDate: new Date()
+                });
+            }
+        }
+
+        const review = await reviewModel.create({
+            userId,
+            businessId,
+            businessType,
+            rating: Math.round(rating),
+            comment: comment || "",
+            media,
+        });
+
+        // Update business stats
+        await updateBusinessRatingStats(businessType, businessId);
+
+        return sendSuccess(res, "Review added successfully", review);
+
+    } catch (error) {
+        log.error("addReview Error: " + error.message);
+        return sendError(res, "Internal server error", error);
     }
-
-    // Check duplicate review
-    const existingReview = await reviewModel.findOne({
-      userId,
-      businessId,
-      businessType: requestedType,
-      isActive: true
-    });
-
-    if (existingReview) {
-      return sendError(res, "You have already reviewed this business.");
-    }
-
-    // Create review
-    const review = await reviewModel.create({
-      userId,
-      businessId,
-      businessType: requestedType,
-      rating,
-      comment,
-    });
-
-    // Update business review stats
-    const updatedBusiness = await updateBusinessReviews(
-      requestedType,
-      businessId,
-      userId,
-      rating,
-      comment
-    );
-
-    return sendSuccess(res, "Review added successfully", {
-      review,
-      averageRating: updatedBusiness.averageRating,
-      totalReviews: (updatedBusiness.reviews || []).length,
-    });
-  } catch (error) {
-    console.error("Error while adding review:", error);
-
-    if (error.code === 11000) {
-      return sendError(res, "You have already reviewed this business.");
-    }
-
-    return sendError(res, "Error while adding review");
-  }
 };
 
 
-// Get reviews for a business
-export const getBusinessReviews = async (req, res) => {
-  try {
-    const { businessId } = req.params;
-    const { page = 1, limit = 10 } = req.query;
-
-    if (!mongoose.Types.ObjectId.isValid(businessId)) {
-      return sendError(res, "Invalid business ID.");
-    }
-
-    const reviews = await reviewModel
-      .find({ businessId, isActive: true })
-      .populate('user', 'name profilePicture')
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    const total = await reviewModel.countDocuments({ businessId, isActive: true });
-
-    return sendSuccess(res, "Reviews fetched successfully", {
-      reviews,
-      totalPages: Math.ceil(total / limit),
-      currentPage: parseInt(page),
-      totalReviews: total,
-    });
-  } catch (error) {
-    console.error("Error while fetching reviews:", error);
-    return sendError(res, "Error while fetching reviews");
-  }
-};
-
-// Update review
-export const updateReview = async (req, res) => {
-  try {
-    const { _id: userId } = req.user;
-    const { reviewId } = req.params;
-    const { rating, comment } = req.body;
-
-    if (rating && (rating < 1 || rating > 5)) {
-      return sendError(res, "Rating must be between 1 and 5.");
-    }
-
-    const review = await reviewModel.findOne({ _id: reviewId, userId, isActive: true });
-
-    if (!review) {
-      return sendError(res, "Review not found or unauthorized.");
-    }
-
-    // Update review
-    if (rating) review.rating = rating;
-    if (comment) review.comment = comment;
-    await review.save();
-
-    // Update business average rating
-    await updateBusinessAverageRating(review.businessType, review.businessId);
-
-    return sendSuccess(res, "Review updated successfully", { review });
-  } catch (error) {
-    console.error("Error while updating review:", error);
-    return sendError(res, "Error while updating review");
-  }
-};
-
-// Delete review (soft delete)
 export const deleteReview = async (req, res) => {
-  try {
-    const { _id: userId } = req.user;
-    const { reviewId } = req.params;
+    try {
+        const { reviewId } = req.params;
 
-    const review = await reviewModel.findOne({ _id: reviewId, userId, isActive: true });
+        const review = await reviewModel.findOne({ _id: reviewId, isActive: true });
+        if (!review) return sendNotFound(res, "Review not found");
 
-    if (!review) {
-      return sendError(res, "Review not found or unauthorized.");
+        for (const m of review.media) {
+            if (m.key) await deleteFromS3(m.key).catch(err => log.error("S3 Delete Error: " + err.message));
+        }
+
+        const businessId = review.businessId;
+        const businessType = review.businessType;
+
+        await reviewModel.findByIdAndDelete(reviewId);
+
+        // Update business stats
+        await updateBusinessRatingStats(businessType, businessId);
+
+        return sendSuccess(res, "Review permanently deleted by admin");
+
+    } catch (error) {
+        log.error("deleteReview Error: " + error.message);
+        return sendError(res, "Internal server error", error);
     }
-
-    // Soft delete
-    review.isActive = false;
-    await review.save();
-
-    // Update business average rating
-    await updateBusinessAverageRating(review.businessType, review.businessId);
-
-    return sendSuccess(res, "Review deleted successfully");
-  } catch (error) {
-    console.error("Error while deleting review:", error);
-    return sendError(res, "Error while deleting review");
-  }
 };
 
-// Get user's reviews
+export const getBusinessReviews = async (req, res) => {
+    try {
+        const { businessId } = req.params;
+        const { page = 1, limit = 10, rating, businessType } = req.query;
+
+        if (!mongoose.Types.ObjectId.isValid(businessId)) {
+            return sendBadRequest(res, "Invalid business ID");
+        }
+
+        const query = { businessId, isActive: true };
+        if (rating) query.rating = Number(rating);
+        if (businessType) query.businessType = businessType;
+
+        const reviews = await reviewModel
+            .find(query)
+            .populate("userId", "name avatar profilePicture")
+            .sort({ createdAt: -1 })
+            .skip((parseInt(page) - 1) * parseInt(limit))
+            .limit(parseInt(limit))
+            .lean();
+
+        const total = await reviewModel.countDocuments(query);
+
+        // Stats calculation
+        const stats = await reviewModel.aggregate([
+            { $match: { businessId: new mongoose.Types.ObjectId(businessId), isActive: true } },
+            {
+                $group: {
+                    _id: "$rating",
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+        let totalCount = 0;
+        let sumRating = 0;
+
+        stats.forEach(s => {
+            distribution[s._id] = s.count;
+            totalCount += s.count;
+            sumRating += (s._id * s.count);
+        });
+
+        const average = totalCount > 0 ? (sumRating / totalCount).toFixed(1) : 0;
+
+        const formattedReviews = reviews.map(r => ({
+            ...r,
+            ratingText: getRatingText(r.rating),
+            likesCount: r.likes?.length || 0,
+            dislikesCount: r.dislikes?.length || 0,
+            likedByUser: req.user?._id ? r.likes?.some(id => id.toString() === req.user._id.toString()) : false,
+            dislikedByUser: req.user?._id ? r.dislikes?.some(id => id.toString() === req.user._id.toString()) : false
+        }));
+
+        return sendSuccess(res, "Reviews fetched successfully", {
+            summary: {
+                average: Number(average),
+                totalReviews: totalCount,
+                distribution
+            },
+            reviews: formattedReviews,
+            pagination: {
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                pages: Math.ceil(total / limit)
+            }
+        });
+
+    } catch (error) {
+        log.error("getBusinessReviews Error: " + error.message);
+        return sendError(res, "Internal server error", error);
+    }
+};
+
+export const likeReview = async (req, res) => {
+    try {
+        const userId = req.user?._id;
+        const { reviewId } = req.params;
+
+        const review = await reviewModel.findById(reviewId);
+        if (!review) return sendNotFound(res, "Review not found");
+
+        // Remove from dislikes if present
+        review.dislikes = review.dislikes.filter(id => id.toString() !== userId.toString());
+
+        const alreadyLiked = review.likes.some(id => id.toString() === userId.toString());
+        if (alreadyLiked) {
+            review.likes = review.likes.filter(id => id.toString() !== userId.toString());
+        } else {
+            review.likes.push(userId);
+        }
+
+        await review.save();
+        return sendSuccess(res, alreadyLiked ? "Like removed" : "Review liked", {
+            likes: review.likes.length,
+            dislikes: review.dislikes.length
+        });
+
+    } catch (error) {
+        return sendError(res, "Internal server error", error);
+    }
+};
+
+export const dislikeReview = async (req, res) => {
+    try {
+        const userId = req.user?._id;
+        const { reviewId } = req.params;
+
+        const review = await reviewModel.findById(reviewId);
+        if (!review) return sendNotFound(res, "Review not found");
+
+        // Remove from likes if present
+        review.likes = review.likes.filter(id => id.toString() !== userId.toString());
+
+        const alreadyDisliked = review.dislikes.some(id => id.toString() === userId.toString());
+        if (alreadyDisliked) {
+            review.dislikes = review.dislikes.filter(id => id.toString() !== userId.toString());
+        } else {
+            review.dislikes.push(userId);
+        }
+
+        await review.save();
+        return sendSuccess(res, alreadyDisliked ? "Dislike removed" : "Review disliked", {
+            likes: review.likes.length,
+            dislikes: review.dislikes.length
+        });
+
+    } catch (error) {
+        return sendError(res, "Internal server error", error);
+    }
+};
+
 export const getUserReviews = async (req, res) => {
-  try {
-    const { _id: userId } = req.user;
-    const { page = 1, limit = 10 } = req.query;
+    try {
+        const userId = req.user?._id;
+        const { page = 1, limit = 10 } = req.query;
 
-    const reviews = await reviewModel
-      .find({ userId, isActive: true })
-      .populate('businessId', 'name images')
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
+        const reviews = await reviewModel
+            .find({ userId, isActive: true })
+            .populate("businessId", "name images address")
+            .sort({ createdAt: -1 })
+            .skip((parseInt(page) - 1) * parseInt(limit))
+            .limit(parseInt(limit));
 
-    const total = await reviewModel.countDocuments({ userId, isActive: true });
+        const total = await reviewModel.countDocuments({ userId, isActive: true });
 
-    return sendSuccess(res, "User reviews fetched successfully", {
-      reviews,
-      totalPages: Math.ceil(total / limit),
-      currentPage: parseInt(page),
-      totalReviews: total,
-    });
-  } catch (error) {
-    console.error("Error while fetching user reviews:", error);
-    return sendError(res, "Error while fetching user reviews");
-  }
+        return sendSuccess(res, "User reviews fetched successfully", {
+            reviews,
+            pagination: {
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                pages: Math.ceil(total / limit)
+            }
+        });
+    } catch (error) {
+        return sendError(res, "Internal server error", error);
+    }
 };
+
 export const getAllReviews = async (req, res) => {
-  try {
-    const { page = 1, limit = 20, businessType, rating } = req.query;
+    try {
+        const { page = 1, limit = 20, businessType, rating } = req.query;
 
-    // Build filter object
-    const filter = { isActive: true };
+        const filter = { isActive: true };
+        if (businessType) filter.businessType = businessType;
+        if (rating) filter.rating = parseInt(rating);
 
-    if (businessType) {
-      filter.businessType = businessType;
+        const reviews = await reviewModel
+            .find(filter)
+            .populate("userId", "name email avatar profilePicture")
+            .populate("businessId", "name images")
+            .sort({ createdAt: -1 })
+            .skip((parseInt(page) - 1) * parseInt(limit))
+            .limit(parseInt(limit));
+
+        const total = await reviewModel.countDocuments(filter);
+
+        return sendSuccess(res, "All reviews fetched successfully", {
+            reviews,
+            total,
+            pages: Math.ceil(total / limit)
+        });
+    } catch (error) {
+        return sendError(res, "Internal server error", error);
     }
-
-    if (rating) {
-      filter.rating = parseInt(rating);
-    }
-
-    // Get reviews with pagination and populate user & business details
-    const reviews = await reviewModel
-      .find(filter)
-      .populate('user', 'name email profilePicture')
-      .populate('businessId', 'name images')
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    // Get total count for pagination
-    const total = await reviewModel.countDocuments(filter);
-
-    return sendSuccess(res, "All reviews fetched successfully", {
-      reviews,
-      totalPages: Math.ceil(total / limit),
-      currentPage: parseInt(page),
-      totalReviews: total,
-      filters: {
-        businessType: businessType || 'all',
-        rating: rating || 'all'
-      }
-    });
-
-  } catch (error) {
-    console.error("Error while fetching all reviews:", error);
-    return sendError(res, "Error while fetching all reviews");
-  }
 };

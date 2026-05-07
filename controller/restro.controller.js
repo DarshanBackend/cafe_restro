@@ -4,7 +4,8 @@ import restroModel from "../model/restro.model.js";
 import adminModel from "../model/admin.model.js";
 import { sendBadRequest, sendCreated, sendError, sendNotFound, sendSuccess } from "../utils/responseUtils.js";
 import log from "../utils/logger.js";
-import { sendNotification } from "../utils/notificatoin.utils.js";
+import { sendNotification } from "../utils/notification.utils.js";
+
 
 // Helper to extract key from S3 URL
 const getS3Key = (url) => {

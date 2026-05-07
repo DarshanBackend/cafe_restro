@@ -22,9 +22,9 @@ export const AdminAuth = async (req, res, next) => {
     // Verify token
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    // if (decoded.role !== "admin") {
-    //   return sendBadRequest(res, "Access denied: User is not an admin");
-    // }
+    if (decoded.role !== "superadmin") {
+      return sendBadRequest(res, "Access denied: User is not an admin");
+    }
 
     // Attach decoded admin data to req for downstream usage
     req.admin = decoded;

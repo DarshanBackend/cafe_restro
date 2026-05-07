@@ -29,6 +29,7 @@ export const newAdminRegister = async (req, res) => {
         _id: existingAdmin._id,
         name: existingAdmin.name,
         email: existingAdmin.email,
+        role: "superadmin"
       };
 
       const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "30d" });
@@ -56,6 +57,7 @@ export const newAdminRegister = async (req, res) => {
       _id: newAdmin._id,
       name: newAdmin.name,
       email: newAdmin.email,
+      role: "superadmin"
     };
 
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "30d" });
@@ -97,6 +99,7 @@ export const adminLogin = async (req, res) => {
       _id: admin._id,
       name: admin.name,
       email: admin.email,
+      role: "superadmin"
     };
 
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "30d" });

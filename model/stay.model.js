@@ -49,7 +49,7 @@ const staySchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
-  rating: {
+  averageRating: {
     type: Number,
     default: 0,
     min: 0,

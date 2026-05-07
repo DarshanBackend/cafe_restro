@@ -17,7 +17,7 @@ import { validateRestroDuplicate } from '../middleware/validateRestroDuplicate.j
 import { sendBadRequest, sendError, sendSuccess } from '../utils/responseUtils.js';
 import { cancelStayBooking, createStayBooking, getAdminStayBookings, getStayBookingById, getStayBookingStatistics, getUserStayBookings, previewStayBooking, stayCheckIn, stayCheckOut, updateStayBookingStatus, updateStayPaymentStatus } from '../controller/stay.booking.controller.js';
 import { getAllCountries, getCityByCountry, getHotelByCity } from '../controller/activity.controller.js';
-import { addReview, deleteReview, getAllReviews, getBusinessReviews, getUserReviews, updateReview } from '../controller/review.controller.js';
+import { addReview, deleteReview, getAllReviews, getBusinessReviews, getUserReviews, likeReview, dislikeReview } from '../controller/review.controller.js';
 import { cancelRestaurantBooking, createRestaurantBooking, getRestaurantBookings, getUserRestaurantBookings, updateRestaurantBookingStatus, updateRestaurantPaymentStatus, previewRestroBooking, getRestaurantBookingById } from '../controller/restro.booking.controller.js';
 import { createHall, deleteHall, getAllHalls, getHallById, getPopularHalls, getPreviewBillingOfHall, updateHall } from '../controller/hall.controller.js';
 import { cancelHallBooking, checkInGuest as hallCheckIn, checkOutGuest as hallCheckOut, createHallBooking, getHallBookingById, getHallBookingStatistics, getHallBookings, getUserHallBookings, updateHallBookingStatus, updateHallPaymentStatus } from '../controller/hall.booking.controller.js';
@@ -26,13 +26,15 @@ import { addNewFeaturedEvent, getAllFeaturedEvents, getFeaturedEventById, update
 import { createTour, deleteTour, getAllTours, getBestOfferTours, getTourById, updateTour, updateTourImage, uploadTourImage } from '../controller/tour.controller.js';
 import { createCoupan, deleteCoupan, getAllCoupans, getCoupanById, toggleCoupanStatus, updateCoupan, applyCoupon, removeCoupon } from '../controller/coupan.controller.js';
 import { createOffer, deleteOffer, getAllOffers, getOfferById, toggleOfferStatus, updateOffer } from '../controller/offer.controller.js';
-import { getMyAllBookings, getMyRefundBooking } from '../controller/payments.controller.js';
+import { getMyPaymentsAndRefunds } from '../controller/payments.controller.js';
+
 import { downloadBookingInvoice } from '../controller/invoice.controller.js';
 import { getTrendingDestinations, WhatsNew, getCoffeeDates, getBrowseByPropertyTypes, getSpecialOffers, getLuxuryStays } from '../controller/home.controller.js';
-import { createNotification, deleteNotification, getAllNotifications, getMyNotifications, getNotificationById, updateNotification } from '../controller/notification.controller.js';
+import { createNotification, deleteMyNotification, deleteNotification, getAllNotifications, getMyNotifications, getNotificationById, markAsRead, updateNotification } from '../controller/notification.controller.js';
 import { createStay, deleteStay, getAllStays, getAdminStays, getStayById, updateStay } from '../controller/stay.controller.js';
 import { createThemeCategory, deleteThemeCategory, getAllThemeCategories, getThemeCategory, updateThemeCategory } from '../controller/themeCategory.controller.js';
 import { getMyBookingsUnified } from '../controller/my.bookings.controller.js';
+import { getFilteredResults } from '../controller/filter.controller.js';
 
 
 
@@ -51,6 +53,10 @@ indexRouter.post("/resetPassword", ResetPassword);
 indexRouter.get("/getAllUsers", getAllUsers);
 indexRouter.get("/getUserById/:id", getUserById);
 indexRouter.put("/updateUser/:id", upload.single("avatar"), updateUser);
+
+// Global Filter
+indexRouter.get("/filter", getFilteredResults);
+
 indexRouter.post("/addAddress", UserAuth, addUserAddress);
 indexRouter.get("/getAddresses", UserAuth, getUserAddresses);
 indexRouter.put("/updateAddress/:addressId", UserAuth, updateAddress);
@@ -251,21 +257,20 @@ indexRouter.patch("/updateTourImage/:id", uploadTourImage, updateTourImage);
 indexRouter.delete("/deleteTour/:id", deleteTour);
 
 //payemnt and all booking in single api not model created!!
-indexRouter.get("/allBookings", UserAuth, getMyAllBookings)
+indexRouter.get("/payments-and-refunds", UserAuth, getMyPaymentsAndRefunds);
 indexRouter.get("/myBookings/unified", UserAuth, getMyBookingsUnified);
 
-indexRouter.get("/downloadInvoice/:id", UserAuth, downloadBookingInvoice);
-indexRouter.get("/getMyRefundedBooking", UserAuth, getMyRefundBooking)
 
 indexRouter.get("/business/:businessId", getBusinessReviews);
 
 // review
-indexRouter.post("/addReview/:businessId", UserAuth, addReview);
+indexRouter.post("/addReview/:businessId", UserAuth, upload.fields([{ name: 'media', maxCount: 10 }]), addReview);
 indexRouter.get("/myReview", UserAuth, getUserReviews);
-indexRouter.put("/review/update/:reviewId", UserAuth, updateReview);
-indexRouter.delete("/review/delete/:reviewId", UserAuth, deleteReview);
+indexRouter.delete("/review/delete/:reviewId", AdminAuth, deleteReview);
 indexRouter.get("/review/business/:businessId", getBusinessReviews);
-indexRouter.get("/getAllReviews", AdminAuth, getAllReviews);
+indexRouter.post("/review/like/:reviewId", UserAuth, likeReview);
+indexRouter.post("/review/dislike/:reviewId", UserAuth, dislikeReview);
+indexRouter.get("/getAllReviews", getAllReviews);
 
 //coupon section
 indexRouter.post("/createCoupan", AdminAuth, createCoupan);
@@ -320,7 +325,9 @@ indexRouter.put("/updateNotification/:id", AdminAuth, updateNotification);
 indexRouter.delete("/deleteNotification/:id", AdminAuth, deleteNotification);
 
 // Users can view their notifications
-indexRouter.get("/my/notification/list", UserAuth, getMyNotifications);
+indexRouter.get("/my/notifications", UserAuth, getMyNotifications);
+indexRouter.patch("/markNotificationAsRead/:id", UserAuth, markAsRead);
+indexRouter.delete("/deleteMyNotification/:id", UserAuth, deleteMyNotification);
 
 
 

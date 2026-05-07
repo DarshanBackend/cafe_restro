@@ -38,7 +38,11 @@ const eventSchema = new mongoose.Schema({
   whatsappNo: {
     type: String
   },
-  rating: {
+  averageRating: {
+    type: Number,
+    default: 0
+  },
+  reviewCount: {
     type: Number,
     default: 0
   },

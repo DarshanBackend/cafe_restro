@@ -3,7 +3,8 @@ import hotelBookingModel from "../model/hotel.booking.model.js";
 import hotelModel from "../model/hotel.model.js";
 import { sendBadRequest, sendError, sendNotFound, sendSuccess } from "../utils/responseUtils.js";
 import coupanModel from "../model/coupan.model.js";
-import { sendNotification } from "../utils/notificatoin.utils.js";
+import { sendNotification } from "../utils/notification.utils.js";
+
 import userModel from "../model/user.model.js";
 import Stripe from "stripe";
 import WalletTransactionModel from "../model/wallet.transaction.model.js";
@@ -176,13 +177,14 @@ export const createBooking = async (req, res) => {
     const savedBooking = await booking.save();
 
     await sendNotification({
-      adminId: hotel.adminId,
-      title: `New Booking Created`,
-      description: `Booking ID: ${savedBooking._id}\nHotel: ${hotel.name}\nDates: ${checkInDate} to ${checkOutDate}`,
-      image: hotel.images[0] || null,
-      type: "single",
       userId,
+      title: `Booking Confirmed! 🏨`,
+      message: `Your booking for ${hotel.name} from ${checkInDate} to ${checkOutDate} has been successfully created. Booking ID: ${savedBooking.bookingId || savedBooking._id.toString().slice(-10).toUpperCase()}`,
+      image: hotel.images[0] || null,
+      type: "HOTEL_BOOKING",
+      reference: { bookingId: savedBooking._id, hotelId: hotel._id }
     }).catch((err) => console.error("Notification Error:", err.message));
+
 
     if (normalizedPaymentMethod === "Wallet") {
       const finalTotal = totalAmount;

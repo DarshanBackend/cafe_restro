@@ -2,7 +2,8 @@ import mongoose from "mongoose";
 import { deleteFromS3, resizeImage, uploadToS3 } from "../middleware/uploadS3.js";
 import cafeModel from "../model/cafe.model.js";
 import adminModel from "../model/admin.model.js";
-import { sendNotification } from "../utils/notificatoin.utils.js";
+import { sendNotification } from "../utils/notification.utils.js";
+
 import log from "../utils/logger.js";
 import { sendNotFound } from '../utils/responseUtils.js'
 import cafeBookingModel from "../model/cafe.booking.model.js";

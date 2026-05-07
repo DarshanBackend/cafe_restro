@@ -4,7 +4,8 @@ import { resizeImage, uploadToS3, deleteFromS3 } from "../middleware/uploadS3.js
 import sharp from "sharp";
 import { sendBadRequest, sendSuccess, sendError } from "../utils/responseUtils.js";
 import log from "../utils/logger.js";
-import { sendNotification } from "../utils/notificatoin.utils.js";
+import { sendNotification } from "../utils/notification.utils.js";
+
 import hotelBookingModel from "../model/hotel.booking.model.js";
 import mongoose from "mongoose";
 
