@@ -623,6 +623,7 @@ export const searchCafes = async (req, res) => {
     const cafes = await cafeModel
       .find(filter)
       .select("-__v")
+      .populate("themeCategoryId", "name image")
       .skip((pageNum - 1) * limitNum)
       .limit(limitNum);
 
@@ -639,7 +640,7 @@ export const searchCafes = async (req, res) => {
         totalPages: Math.ceil(total / limitNum),
         totalResults: total,
       },
-      data: cafes,
+      result: cafes,
     });
 
   } catch (error) {
@@ -722,8 +723,9 @@ export const mainSearchCafes = async (req, res) => {
       .sort(sortOptions)
       .limit(20)
       .select(
-        "name description images averageRating pricing themeCategory location amenities popular"
+        "name description images averageRating pricing themeCategoryId location amenities popular"
       )
+      .populate("themeCategoryId", "name image")
       .lean();
 
     return res.status(200).json({
