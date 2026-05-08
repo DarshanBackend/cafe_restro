@@ -108,8 +108,8 @@ indexRouter.post("/hotel/createBooking/:hotelId", UserAuth, createBooking);
 indexRouter.post("/hotel/previewBooking/:hotelId", UserAuth, previewHotelBooking);
 indexRouter.get("/hotel/MyBookings", UserAuth, getMyHotelBookings);
 indexRouter.get("/HotelAdminBookings", AdminAuth, hotelAdminBookings);
-indexRouter.patch("/updatePaymentStatus/:bookingId", AdminAuth, updateHotelPaymentStatus);
-indexRouter.patch("/updateBookingStatus/:id", AdminAuth, updateHotelBookingStatus);
+indexRouter.patch("/hotel/updatePaymentStatus/:bookingId", AdminAuth, updateHotelPaymentStatus);
+indexRouter.patch("/hotel/updateBookingStatus/:id", AdminAuth, updateHotelBookingStatus);
 indexRouter.put("/hotel/cancel/:bookingId", UserAuth, cancelHotelBooking);
 
 //watchlist
@@ -155,8 +155,8 @@ indexRouter.put("/cancelBooking/:bookingId", UserAuth, cancelBooking);
 indexRouter.post("/preview-booking/:cafeId", previewCafeBooking);
 // Admin routes
 indexRouter.get("/cafe/:cafeId", AdminAuth, getCafeBookings);
-indexRouter.put("/updateBookingStatus/:id", AdminAuth, updateBookingStatus);
-indexRouter.put("/updatePaymentStatus/:id", AdminAuth, updatePaymentStatus);
+indexRouter.put("/cafe/updateBookingStatus/:id", AdminAuth, updateBookingStatus);
+indexRouter.put("/cafe/updatePaymentStatus/:id", AdminAuth, updatePaymentStatus);
 
 
 //restro section

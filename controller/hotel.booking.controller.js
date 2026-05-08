@@ -491,16 +491,16 @@ export const updateHotelPaymentStatus = async (req, res) => {
       return sendError(res, 400, "Invalid status value");
     }
 
-    const booking = await hotelBookingModel.findOne({ _id: bookingId, adminId });
+    const booking = await hotelBookingModel.findOne({ _id: bookingId });
     if (!booking) {
-      return sendError(res, 404, "Booking not found or not authorized");
+      return sendError(res, 404, "Booking not found");
     }
 
     const previousPaymentStatus = booking.payment.paymentStatus.toLowerCase();
     const newPaymentStatus = status.toLowerCase();
 
-    // If changing to cancelled and it was previously paid, process refund
-    if (newPaymentStatus === "cancelled" && (previousPaymentStatus === "completed" || previousPaymentStatus === "confirmed")) {
+    // If changing to refunded and it wasn't refunded yet, process refund to wallet
+    if (newPaymentStatus === "refunded" && previousPaymentStatus !== "refunded") {
       const amountToRefund = booking.pricing.totalAmount;
       const user = await userModel.findById(booking.userId);
 
@@ -513,7 +513,7 @@ export const updateHotelPaymentStatus = async (req, res) => {
           userId: user._id,
           amount: amountToRefund,
           type: "credit",
-          description: `Refund for Hotel Booking (Payment Cancelled by Admin) - ${booking.bookingId || booking._id}`,
+          description: `Refund for Hotel Booking (Approved by Admin) - ${booking.bookingId || booking._id}`,
           status: "completed"
         });
         await wTxn.save();
@@ -521,9 +521,14 @@ export const updateHotelPaymentStatus = async (req, res) => {
         booking.payment.paymentStatus = "refunded";
         booking.bookingStatus = "cancelled";
       } else {
-        booking.payment.paymentStatus = newPaymentStatus;
+        booking.payment.paymentStatus = "refunded";
         booking.bookingStatus = "cancelled";
       }
+    } 
+    // If changing to cancelled from completed, we just mark it cancelled. Admin has to manually refund it later.
+    else if (newPaymentStatus === "cancelled" && (previousPaymentStatus === "completed" || previousPaymentStatus === "confirmed")) {
+      booking.payment.paymentStatus = "cancelled";
+      booking.bookingStatus = "cancelled";
     } else {
       booking.payment.paymentStatus = newPaymentStatus;
 
@@ -562,9 +567,9 @@ export const updateHotelBookingStatus = async (req, res) => {
     }
 
     // Find booking
-    const booking = await hotelBookingModel.findOne({ _id: id, adminId });
+    const booking = await hotelBookingModel.findOne({ _id: id });
     if (!booking) {
-      return sendError(res, 404, "Booking not found or not authorized");
+      return sendError(res, 404, "Booking not found");
     }
 
     const previousStatus = booking.bookingStatus.toLowerCase();
@@ -629,33 +634,17 @@ export const cancelHotelBooking = async (req, res) => {
     booking.bookingStatus = "cancelled";
 
     if (isPaid) {
-      booking.payment.paymentStatus = "refunded";
-
-      // Credit amount back to user's wallet
-      const user = await userModel.findById(userId);
-      if (user) {
-        user.walletBalance = (user.walletBalance || 0) + amountToRefund;
-        await user.save();
-
-        // Record wallet transaction
-        const wTxn = new WalletTransactionModel({
-          userId,
-          amount: amountToRefund,
-          type: "credit",
-          description: `Refund for Hotel Booking (Cancelled by User) - ${booking.bookingId || booking._id}`,
-          status: "completed"
-        });
-        await wTxn.save();
-      }
+      // Don't refund instantly. Set payment to cancelled, it will show as 'Pending' in timeline.
+      // Admin will manually update payment status to "refunded" to credit the wallet.
+      booking.payment.paymentStatus = "cancelled";
     } else {
       booking.payment.paymentStatus = "cancelled";
     }
 
     await booking.save();
 
-    return sendSuccess(res, isPaid ? "Booking cancelled and refund processed to wallet successfully" : "Booking cancelled successfully", {
+    return sendSuccess(res, isPaid ? "Booking cancelled. Refund request has been sent for processing." : "Booking cancelled successfully", {
       bookingId: booking._id,
-      refundAmount: isPaid ? amountToRefund : 0,
       paymentStatus: booking.payment.paymentStatus
     });
 

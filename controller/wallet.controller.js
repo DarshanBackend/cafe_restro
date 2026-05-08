@@ -26,35 +26,23 @@ export const addMoneyToWallet = async (req, res) => {
   try {
     const stripe = new Stripe(process.env.STRIPE_SECRET);
     const userId = req.user._id;
-    const { amount } = req.body; // Amount in INR
+    const { amount } = req.body;
 
     if (!amount || amount <= 0) {
       return sendBadRequest(res, "Invalid amount");
     }
 
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      line_items: [
-        {
-          price_data: {
-            currency: "inr",
-            product_data: {
-              name: "Wallet Top-up",
-              description: "Add funds to your Cafe & Restro wallet",
-            },
-            unit_amount: Math.round(amount * 100), // Stripe expects amount in paise (cents)
-          },
-          quantity: 1,
-        },
-      ],
-      mode: "payment",
-      success_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/wallet/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/wallet/cancel`,
+    const user = await userModel.findById(userId);
+    if (!user) return sendNotFound(res, "User not found");
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(amount * 100),
+      currency: "inr",
+      description: "Wallet Top-up",
       metadata: {
         userId: userId.toString(),
-        amount: amount.toString(),
         type: "wallet_topup"
-      },
+      }
     });
 
     const transaction = new WalletTransactionModel({
@@ -62,16 +50,16 @@ export const addMoneyToWallet = async (req, res) => {
       amount,
       type: "credit",
       description: "Wallet Top-up via Stripe",
-      transactionId: session.id,
+      transactionId: paymentIntent.id,
       status: "pending"
     });
     await transaction.save();
 
-    return res.status(200).json({
-      success: true,
-      message: "Payment session initialized",
-      sessionId: session.id,
-      url: session.url
+    return sendSuccess(res, "Payment Intent created successfully", {
+      paymentIntentId: paymentIntent.id,
+      clientSecret: paymentIntent.client_secret,
+      amount: transaction.amount,
+      status: "pending"
     });
   } catch (error) {
     log.error("Add Money to Wallet Error: " + error.message);
@@ -82,25 +70,25 @@ export const addMoneyToWallet = async (req, res) => {
 export const verifyWalletPayment = async (req, res) => {
   try {
     const stripe = new Stripe(process.env.STRIPE_SECRET);
-    const { sessionId } = req.body;
+    const { paymentIntentId } = req.body;
 
-    if (!sessionId) {
-      return sendBadRequest(res, "Session ID is required");
+    if (!paymentIntentId) {
+      return sendBadRequest(res, "paymentIntentId is required");
     }
 
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
-    
-    if (session.payment_status === "paid") {
-      const transaction = await WalletTransactionModel.findOne({ transactionId: sessionId });
-      
-      if (!transaction) {
-        return sendNotFound(res, "Transaction not found");
-      }
+    const transaction = await WalletTransactionModel.findOne({ transactionId: paymentIntentId });
 
-      if (transaction.status === "completed") {
-        return sendSuccess(res, "Payment already verified", { balance: req.user?.walletBalance });
-      }
+    if (!transaction) {
+      return sendNotFound(res, "Transaction not found");
+    }
 
+    if (transaction.status === "completed") {
+      return sendSuccess(res, "Payment is already verified", { balance: req.user?.walletBalance });
+    }
+
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+    if (paymentIntent.status === "succeeded") {
       transaction.status = "completed";
       await transaction.save();
 
@@ -108,9 +96,12 @@ export const verifyWalletPayment = async (req, res) => {
       user.walletBalance = (user.walletBalance || 0) + transaction.amount;
       await user.save();
 
-      return sendSuccess(res, "Wallet topped up successfully", { balance: user.walletBalance });
+      return sendSuccess(res, "Payment successful and money added to wallet", {
+        walletBalance: user.walletBalance,
+        transaction
+      });
     } else {
-      return sendBadRequest(res, "Payment not successful");
+      return sendBadRequest(res, `Payment not successful. Current status: ${paymentIntent.status}`);
     }
   } catch (error) {
     log.error("Verify Wallet Payment Error: " + error.message);

@@ -1,9 +1,10 @@
 import hotelBookingModel from "../model/hotel.booking.model.js";
 import cafeBookingModel from "../model/cafe.booking.model.js";
-import log from "../utils/logger.js";
-import { sendBadRequest, sendError, sendNotFound, sendSuccess } from "../utils/responseUtils.js";
-import mongoose from "mongoose";
 import restaurantBookingModel from "../model/restro.booking.model.js";
+import stayBookingModel from "../model/stay.booking.model.js";
+import hallBookingModel from "../model/hall.booking.model.js";
+import log from "../utils/logger.js";
+import { sendError } from "../utils/responseUtils.js";
 
 export const getMyPaymentsAndRefunds = async (req, res) => {
   try {
@@ -11,10 +12,12 @@ export const getMyPaymentsAndRefunds = async (req, res) => {
     const now = new Date();
 
     // 1. Fetch all bookings from all models
-    const [hotelBookings, cafeBookings, restroBookings] = await Promise.all([
+    const [hotelBookings, cafeBookings, restroBookings, stayBookings, hallBookings] = await Promise.all([
       hotelBookingModel.find({ userId }).populate("hotelId", "name address city").sort({ createdAt: -1 }),
       cafeBookingModel.find({ userId }).populate("cafeId", "name location").sort({ createdAt: -1 }),
-      restaurantBookingModel.find({ userId }).populate("restaurantId", "name address city").sort({ createdAt: -1 })
+      restaurantBookingModel.find({ userId }).populate("restaurantId", "name address city").sort({ createdAt: -1 }),
+      stayBookingModel.find({ userId }).populate("stayId", "name location city").sort({ createdAt: -1 }),
+      hallBookingModel.find({ userId }).populate("hallId", "name location city").sort({ createdAt: -1 })
     ]);
 
     const normalizeBooking = (booking, type) => {
@@ -27,7 +30,11 @@ export const getMyPaymentsAndRefunds = async (req, res) => {
 
       return {
         _id: booking._id,
-        property_name: type === "hotel" ? booking.hotelId?.name : (type === "cafe" ? booking.cafeId?.name : booking.restaurantId?.name),
+        property_name: type === "hotel" ? booking.hotelId?.name : 
+                       type === "cafe" ? booking.cafeId?.name : 
+                       type === "stay" ? booking.stayId?.name :
+                       type === "hall" ? booking.hallId?.name :
+                       booking.restaurantId?.name,
         status: status,
         checkIn: booking.bookingDates?.checkInDate || booking.checkInDate,
         checkOut: booking.bookingDates?.checkOutDate || booking.checkOutDate,
@@ -43,6 +50,50 @@ export const getMyPaymentsAndRefunds = async (req, res) => {
       if (paymentStatus !== "refunded" && (booking.bookingStatus || "").toLowerCase() !== "cancelled") return null;
 
       const isCompleted = paymentStatus === "refunded";
+      
+      // Calculate realistic timeline dates based on cancellation time
+      const cancelDate = new Date(booking.updatedAt || booking.createdAt);
+      
+      const reviewDate = new Date(cancelDate);
+      reviewDate.setHours(reviewDate.getHours() + 12); // Review after 12 hours
+      
+      const checkProcessDate = new Date(cancelDate);
+      checkProcessDate.setDate(checkProcessDate.getDate() + 7); // Processed after 7 days
+      
+      const refundCompletedDate = new Date(cancelDate);
+      refundCompletedDate.setDate(refundCompletedDate.getDate() + 12); // Full refund after 12 days
+
+      // Format date helper (e.g. "14, Aug 25 09:42 PM")
+      const formatDate = (dateObj) => {
+        return dateObj.toLocaleDateString('en-GB', { 
+          day: '2-digit', month: 'short', year: '2-digit' 
+        }) + " " + dateObj.toLocaleTimeString('en-US', { 
+          hour: '2-digit', minute: '2-digit', hour12: true 
+        }).toUpperCase();
+      };
+
+      const formatOnlyDate = (dateObj) => {
+        return dateObj.toLocaleDateString('en-GB', { 
+          day: '2-digit', month: 'short', year: '2-digit' 
+        });
+      };
+
+      let timeline;
+      if (isCompleted) {
+        timeline = [
+          { label: "Cancel your booking", date: formatDate(cancelDate), status: "completed" },
+          { label: "Review your request", date: formatDate(reviewDate), status: "completed" },
+          { label: "Check payment process", date: formatDate(checkProcessDate), status: "completed" },
+          { label: "Process of your refund", date: formatDate(refundCompletedDate), status: "completed" }
+        ];
+      } else {
+        timeline = [
+          { label: "Cancel your booking", date: formatDate(cancelDate), status: "completed" },
+          { label: "Review your request", date: formatDate(reviewDate), status: "completed" },
+          { label: "Check payment process", date: "As soon possible", status: "pending" },
+          { label: "Process of your refund", date: `Estimate date by ${formatOnlyDate(refundCompletedDate)}`, status: "pending" }
+        ];
+      }
 
       return {
         _id: booking._id,
@@ -51,25 +102,24 @@ export const getMyPaymentsAndRefunds = async (req, res) => {
         date: booking.updatedAt,
         amount: booking.pricing?.totalAmount || 0,
         currency: booking.pricing?.currency || "INR",
-        timeline: [
-          { label: "Cancel your booking", date: booking.updatedAt, status: "completed" },
-          { label: "Review your request", date: booking.updatedAt, status: isCompleted ? "completed" : "pending" },
-          { label: "Check payment process", status: isCompleted ? "completed" : "pending" },
-          { label: "Process of your refund", status: isCompleted ? "completed" : "pending" }
-        ]
+        timeline
       };
     };
 
     const payments = [
       ...hotelBookings.map(b => normalizeBooking(b, "hotel")),
       ...cafeBookings.map(b => normalizeBooking(b, "cafe")),
-      ...restroBookings.map(b => normalizeBooking(b, "restro"))
+      ...restroBookings.map(b => normalizeBooking(b, "restro")),
+      ...stayBookings.map(b => normalizeBooking(b, "stay")),
+      ...hallBookings.map(b => normalizeBooking(b, "hall"))
     ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
     const refunds = [
       ...hotelBookings.map(normalizeRefund),
       ...cafeBookings.map(normalizeRefund),
-      ...restroBookings.map(normalizeRefund)
+      ...restroBookings.map(normalizeRefund),
+      ...stayBookings.map(normalizeRefund),
+      ...hallBookings.map(normalizeRefund)
     ].filter(Boolean).sort((a, b) => new Date(b.date) - new Date(a.date));
 
     return res.status(200).json({
