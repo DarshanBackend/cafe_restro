@@ -6,6 +6,7 @@ import { sendBadRequest, sendCreated, sendError, sendNotFound, sendSuccess } fro
 import log from "../utils/logger.js";
 import { sendNotification } from "../utils/notification.utils.js";
 import themeCategoryModel from "../model/themeCategory.model.js";
+import restaurantBookingModel from "../model/restro.booking.model.js";
 
 
 // Helper to extract key from S3 URL
@@ -374,5 +375,55 @@ export const getRestrosByTheme = async (req, res) => {
   } catch (error) {
     log.error("Get Restros By Theme Error: " + error.message);
     return sendError(res, "Server Error", error);
+  }
+};
+
+// Get Popular Restaurants (Based on booking count)
+export const getPopularRestros = async (req, res) => {
+  try {
+    const { limit = 10 } = req.query;
+
+    const popularData = await restaurantBookingModel.aggregate([
+      {
+        $group: {
+          _id: "$restaurantId",
+          bookingCount: { $sum: 1 }
+        }
+      },
+      { $sort: { bookingCount: -1 } },
+      { $limit: parseInt(limit) },
+      {
+        $lookup: {
+          from: "restros",
+          localField: "_id",
+          foreignField: "_id",
+          as: "restaurant"
+        }
+      },
+      { $unwind: "$restaurant" },
+      {
+        $project: {
+          _id: 0,
+          restaurant: "$restaurant",
+          bookingCount: 1
+        }
+      }
+    ]);
+
+    let results = popularData.map(item => ({
+      ...item.restaurant,
+      bookingCount: item.bookingCount
+    }));
+
+    if (results.length === 0) {
+      results = await restroModel.find({ popular: true, status: "active" })
+        .limit(parseInt(limit))
+        .lean();
+    }
+
+    return sendSuccess(res, "Popular restaurants fetched successfully", results);
+  } catch (error) {
+    log.error("Get Popular Restros Error: " + error.message);
+    return sendError(res, "Internal Server Error", error);
   }
 };

@@ -12,7 +12,7 @@ import log from '../utils/logger.js'
 import { addToWatchlist, getMyWatchlist, removeWatchlistItem } from '../controller/watchlist.controller.js';
 import { addCafeImages, cafeThemes, createNewCafe, deleteCafe, getAllCafes, getCafeById, getCafesByLocation, getCafesByTheme, getPopularCafes, mainSearchCafes, removeCafeImage, searchCafes, updateCafe } from '../controller/cafe.controller.js';
 import { cancelBooking, createCafeBooking, getBookingById, getCafeBookings, getUserBookings, previewCafeBooking, updateBookingStatus, updatePaymentStatus } from '../controller/cafe.booking.controller.js';
-import { createNewRestaurant, deleteRestaurant, filterRestaurants, getAllRestos, getSingleRestro, restroChangeStatus, searchRestaurants, updateRestaurant, addRestroImages, removeRestroImage, getRestrosByTheme } from '../controller/restro.controller.js';
+import { createNewRestaurant, deleteRestaurant, filterRestaurants, getAllRestos, getSingleRestro, restroChangeStatus, searchRestaurants, updateRestaurant, addRestroImages, removeRestroImage, getRestrosByTheme, getPopularRestros } from '../controller/restro.controller.js';
 import { validateRestroDuplicate } from '../middleware/validateRestroDuplicate.js';
 import { sendBadRequest, sendError, sendSuccess } from '../utils/responseUtils.js';
 import { cancelStayBooking, createStayBooking, getAdminStayBookings, getStayBookingById, getStayBookingStatistics, getUserStayBookings, previewStayBooking, stayCheckIn, stayCheckOut, updateStayBookingStatus, updateStayPaymentStatus } from '../controller/stay.booking.controller.js';
@@ -173,6 +173,7 @@ indexRouter.get("/resto/filter/advanced", filterRestaurants);
 //search restro
 indexRouter.get("/restro/search", searchRestaurants);
 indexRouter.get("/restro/changeStatus/:id", AdminAuth, restroChangeStatus);
+indexRouter.get("/restro/popular", getPopularRestros);
 indexRouter.get("/getRestrosByTheme", getRestrosByTheme);
 
 // user side
