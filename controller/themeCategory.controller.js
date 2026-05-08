@@ -173,3 +173,26 @@ export const deleteThemeCategory = async (req, res) => {
         return sendError(res, "Internal Server Error", error);
     }
 }
+
+export const getThemesByArea = async (req, res) => {
+    try {
+        const { area } = req.query;
+
+        if (!area || !area.trim()) {
+            return sendBadRequest(res, "Area is required (cafe or restaurant)");
+        }
+
+        const trimmedArea = area.trim().toLowerCase();
+
+        if (!["cafe", "restaurant"].includes(trimmedArea)) {
+            return sendBadRequest(res, "Invalid area. Must be 'cafe' or 'restaurant'");
+        }
+
+        const categories = await themeCategoryModel.find({ area: trimmedArea }).sort({ createdAt: -1 });
+        
+        return sendSuccess(res, `Theme categories for ${trimmedArea} fetched successfully`, categories);
+    } catch (error) {
+        log.error("Get Themes By Area Error: " + error.message);
+        return sendError(res, "Internal Server Error", error);
+    }
+}

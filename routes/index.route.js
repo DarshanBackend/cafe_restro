@@ -12,7 +12,7 @@ import log from '../utils/logger.js'
 import { addToWatchlist, getMyWatchlist, removeWatchlistItem } from '../controller/watchlist.controller.js';
 import { addCafeImages, cafeThemes, createNewCafe, deleteCafe, getAllCafes, getCafeById, getCafesByLocation, getCafesByTheme, getPopularCafes, mainSearchCafes, removeCafeImage, searchCafes, updateCafe } from '../controller/cafe.controller.js';
 import { cancelBooking, createCafeBooking, getBookingById, getCafeBookings, getUserBookings, previewCafeBooking, updateBookingStatus, updatePaymentStatus } from '../controller/cafe.booking.controller.js';
-import { createNewRestaurant, deleteRestaurant, filterRestaurants, getAllRestos, getSingleRestro, restroChangeStatus, searchRestaurants, updateRestaurant, addRestroImages, removeRestroImage } from '../controller/restro.controller.js';
+import { createNewRestaurant, deleteRestaurant, filterRestaurants, getAllRestos, getSingleRestro, restroChangeStatus, searchRestaurants, updateRestaurant, addRestroImages, removeRestroImage, getRestrosByTheme } from '../controller/restro.controller.js';
 import { validateRestroDuplicate } from '../middleware/validateRestroDuplicate.js';
 import { sendBadRequest, sendError, sendSuccess } from '../utils/responseUtils.js';
 import { cancelStayBooking, createStayBooking, getAdminStayBookings, getStayBookingById, getStayBookingStatistics, getUserStayBookings, previewStayBooking, stayCheckIn, stayCheckOut, updateStayBookingStatus, updateStayPaymentStatus } from '../controller/stay.booking.controller.js';
@@ -32,7 +32,7 @@ import { downloadBookingInvoice } from '../controller/invoice.controller.js';
 import { getTrendingDestinations, WhatsNew, getCoffeeDates, getBrowseByPropertyTypes, getSpecialOffers, getLuxuryStays } from '../controller/home.controller.js';
 import { createNotification, deleteMyNotification, deleteNotification, getAllNotifications, getMyNotifications, getNotificationById, markAsRead, updateNotification } from '../controller/notification.controller.js';
 import { createStay, deleteStay, getAllStays, getAdminStays, getStayById, updateStay } from '../controller/stay.controller.js';
-import { createThemeCategory, deleteThemeCategory, getAllThemeCategories, getThemeCategory, updateThemeCategory } from '../controller/themeCategory.controller.js';
+import { createThemeCategory, deleteThemeCategory, getAllThemeCategories, getThemeCategory, getThemesByArea, updateThemeCategory } from '../controller/themeCategory.controller.js';
 import { getMyBookingsUnified } from '../controller/my.bookings.controller.js';
 import { getFilteredResults } from '../controller/filter.controller.js';
 
@@ -125,6 +125,7 @@ indexRouter.get("/getCafesByTheme", getCafesByTheme);
 indexRouter.post("/createThemeCategory", AdminAuth, upload.single("image"), createThemeCategory);
 indexRouter.get("/getAllThemeCategories", getAllThemeCategories);
 indexRouter.get("/getThemeCategory/:id", getThemeCategory);
+indexRouter.get("/getThemesByArea", getThemesByArea);
 indexRouter.put("/updateThemeCategory/:id", AdminAuth, upload.single("image"), updateThemeCategory);
 indexRouter.delete("/deleteThemeCategory/:id", AdminAuth, deleteThemeCategory);
 
@@ -172,6 +173,7 @@ indexRouter.get("/resto/filter/advanced", filterRestaurants);
 //search restro
 indexRouter.get("/restro/search", searchRestaurants);
 indexRouter.get("/restro/changeStatus/:id", AdminAuth, restroChangeStatus);
+indexRouter.get("/getRestrosByTheme", getRestrosByTheme);
 
 // user side
 indexRouter.post("/restro/preview-booking/:restaurantId", previewRestroBooking);

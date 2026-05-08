@@ -5,6 +5,7 @@ import adminModel from "../model/admin.model.js";
 import { sendBadRequest, sendCreated, sendError, sendNotFound, sendSuccess } from "../utils/responseUtils.js";
 import log from "../utils/logger.js";
 import { sendNotification } from "../utils/notification.utils.js";
+import themeCategoryModel from "../model/themeCategory.model.js";
 
 
 // Helper to extract key from S3 URL
@@ -345,6 +346,33 @@ export const removeRestroImage = async (req, res) => {
     await restro.save();
     return sendSuccess(res, "Image removed successfully", restro.images);
   } catch (error) {
+    return sendError(res, "Server Error", error);
+  }
+};
+
+
+export const getRestrosByTheme = async (req, res) => {
+  try {
+    const { themeId } = req.query;
+
+    if (!themeId || !mongoose.Types.ObjectId.isValid(themeId)) {
+      return sendBadRequest(res, "Valid Theme Category ID is required");
+    }
+
+    const restros = await restroModel.find({
+      themeCategoryId: themeId,
+      status: "active",
+    })
+      .select("-__v")
+      .populate("themeCategoryId", "name image")
+      .populate("ownerId", "name email");
+
+    return sendSuccess(res, "Restaurants fetched by theme successfully", {
+      restros,
+      total: restros.length
+    });
+  } catch (error) {
+    log.error("Get Restros By Theme Error: " + error.message);
     return sendError(res, "Server Error", error);
   }
 };
