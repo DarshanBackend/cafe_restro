@@ -6,12 +6,10 @@ import { v4 as uuidv4 } from "uuid";
 import log from "../utils/logger.js";
 import coupanModel from "../model/coupan.model.js";
 import { sendNotification } from "../utils/notification.utils.js";
-
 import userModel from "../model/user.model.js";
 import WalletTransactionModel from "../model/wallet.transaction.model.js";
 import Stripe from "stripe";
 
-// Create new restaurant booking
 export const createRestaurantBooking = async (req, res) => {
   try {
     if (!process.env.STRIPE_SECRET) {
@@ -73,7 +71,6 @@ export const createRestaurantBooking = async (req, res) => {
       });
     }
 
-    // Billing Logic
     const guestRate = restaurant.discountPrice || 200;
     const totalGuests = Number(adults) + Number(children);
     const totalGuestRate = guestRate * totalGuests * Number(numberOfRooms);
@@ -281,7 +278,6 @@ export const createRestaurantBooking = async (req, res) => {
   }
 };
 
-// Get all bookings for a user
 export const getUserRestaurantBookings = async (req, res) => {
   try {
     const userId = req.user?._id;
@@ -321,7 +317,6 @@ export const getUserRestaurantBookings = async (req, res) => {
   }
 };
 
-// Get all bookings for a restaurant (admin)
 export const getRestaurantBookings = async (req, res) => {
   try {
     const adminId = req.admin?._id;
@@ -366,7 +361,6 @@ export const getRestaurantBookings = async (req, res) => {
   }
 };
 
-// Get booking by ID
 export const getRestaurantBookingById = async (req, res) => {
   try {
     const { bookingId } = req.params;
@@ -559,7 +553,6 @@ export const previewRestroBooking = async (req, res) => {
   }
 };
 
-// Update booking status
 export const updateRestaurantBookingStatus = async (req, res) => {
   try {
     const adminId = req.admin?._id;
@@ -623,7 +616,6 @@ export const updateRestaurantBookingStatus = async (req, res) => {
   }
 };
 
-// Update payment status
 export const updateRestaurantPaymentStatus = async (req, res) => {
   try {
     const adminId = req.admin?._id;
@@ -688,7 +680,6 @@ export const updateRestaurantPaymentStatus = async (req, res) => {
   }
 };
 
-// Cancel booking
 export const cancelRestaurantBooking = async (req, res) => {
   try {
     const { bookingId } = req.params;

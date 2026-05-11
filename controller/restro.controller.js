@@ -8,15 +8,12 @@ import { sendNotification } from "../utils/notification.utils.js";
 import themeCategoryModel from "../model/themeCategory.model.js";
 import restaurantBookingModel from "../model/restro.booking.model.js";
 
-
-// Helper to extract key from S3 URL
 const getS3Key = (url) => {
   if (!url || typeof url !== "string") return null;
   const parts = url.split(".amazonaws.com/");
   return parts.length > 1 ? parts[1] : null;
 };
 
-// Create New Restaurant (Exactly same as Cafe)
 export const createNewRestaurant = async (req, res) => {
   try {
     const {
@@ -47,7 +44,6 @@ export const createNewRestaurant = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid theme category ID" });
     }
 
-    // Duplicate Check
     const existingRestro = await restroModel.findOne({
       name: name.trim(),
       address: address.trim(),
@@ -65,7 +61,6 @@ export const createNewRestaurant = async (req, res) => {
     const parsedOperatingHours = parseObj(operatingHours);
     const parsedContact = parseObj(contact);
 
-    // Image Upload Handling (Same as Cafe)
     let imageUrls = [];
     if (req.files && req.files.length > 0) {
       const imageFiles = req.files.filter(f => f.fieldname === "images");
@@ -118,7 +113,6 @@ export const createNewRestaurant = async (req, res) => {
   }
 };
 
-// Update Restaurant (Properly synced with Cafe style)
 export const updateRestaurant = async (req, res) => {
   try {
     const { id } = req.params;
@@ -135,13 +129,11 @@ export const updateRestaurant = async (req, res) => {
     const body = req.body || {};
     const updateData = {};
 
-    // Basic Fields
     if (body.name) updateData.name = body.name.trim();
     if (body.description) updateData.description = body.description.trim();
     if (body.status) updateData.status = body.status;
     if (body.popular !== undefined) updateData.popular = body.popular === "true" || body.popular === true;
 
-    // Flattened Fields
     if (body.address) updateData.address = body.address.trim();
     if (body.city) updateData.city = body.city.trim();
     if (body.state) updateData.state = body.state;
@@ -152,7 +144,6 @@ export const updateRestaurant = async (req, res) => {
     if (body.discountPrice) updateData.discountPrice = Number(body.discountPrice);
     if (body.currency) updateData.currency = body.currency;
 
-    // JSON parsing with error handling (Cafe Style)
     const safeParse = (data, fallback) => {
       try {
         return typeof data === "string" ? JSON.parse(data) : data;
@@ -170,7 +161,6 @@ export const updateRestaurant = async (req, res) => {
       updateData.themeCategoryId = body.themeCategoryId;
     }
 
-    // 3. Image Upload Handling
     if (req.files && req.files.length > 0) {
       const imageFiles = req.files.filter(f => f.fieldname === "images");
       const newImages = [];
@@ -245,7 +235,6 @@ export const deleteRestaurant = async (req, res) => {
     const restro = await restroModel.findById(id);
     if (!restro) return res.status(404).json({ success: false, message: "Restaurant not found" });
 
-    // Proper Cleanup of S3 images using Key
     if (restro.images && restro.images.length > 0) {
       for (const url of restro.images) {
         const key = getS3Key(url);
@@ -309,7 +298,6 @@ export const filterRestaurants = async (req, res) => {
   }
 };
 
-// Image addition/removal (Like Cafe)
 export const addRestroImages = async (req, res) => {
   try {
     const { id } = req.params;
@@ -351,7 +339,6 @@ export const removeRestroImage = async (req, res) => {
   }
 };
 
-
 export const getRestrosByTheme = async (req, res) => {
   try {
     const { themeId } = req.query;
@@ -378,7 +365,6 @@ export const getRestrosByTheme = async (req, res) => {
   }
 };
 
-// Get Popular Restaurants (Based on booking count)
 export const getPopularRestros = async (req, res) => {
   try {
     const { limit = 10 } = req.query;

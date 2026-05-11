@@ -7,8 +7,6 @@ import { sendBadRequest, sendError, sendNotFound, sendSuccess } from "../utils/r
 import log from "../utils/logger.js";
 import reviewModel from "../model/review.model.js";
 
-
-// In your controller - CHANGE THIS:
 export const createHall = async (req, res) => {
   try {
     const {
@@ -33,18 +31,15 @@ export const createHall = async (req, res) => {
       return sendBadRequest(res, "You'r user OOPS!")
     }
 
-    // Validation
     if (!name?.trim()) return sendBadRequest(res, "Hall name is required");
     if (!actualPrice || actualPrice <= 0) return sendBadRequest(res, "Valid actual price is required");
     if (!discountPrice || discountPrice <= 0) return sendBadRequest(res, "Valid discount price is required");
 
-    // Check for duplicate hall BEFORE uploading images
     const existingHall = await hallModel.findOne({ name: name.trim() });
     if (existingHall) {
       return sendBadRequest(res, "A hall with this name already exists");
     }
 
-    // ---- File uploads ----
     const imageFile = req.files?.image?.[0] || req.files?.featured?.[0] || req.files?.images?.[0];
 
     const imageUrl = imageFile
@@ -56,10 +51,8 @@ export const createHall = async (req, res) => {
       )
       : null;
 
-    // ---- Parse JSON fields ----
     const parsed = (v, fallback = []) => (typeof v === "string" ? JSON.parse(v) : v || fallback);
 
-    // ---- Create hall ----
     const hall = new hallModel({
       adminId: adminId,
       name: name.trim(),
@@ -84,7 +77,6 @@ export const createHall = async (req, res) => {
 
     await hall.save();
 
-    // ✅ Append hall ID to admin model
     if (hall.adminId && hall._id) {
       await adminModel.findByIdAndUpdate(
         hall.adminId,
@@ -101,9 +93,6 @@ export const createHall = async (req, res) => {
   }
 };
 
-// @desc    Get all halls with filtering and pagination
-// @route   GET /api/halls
-// @access  Public
 export const getAllHalls = async (req, res) => {
   try {
     const {
@@ -117,7 +106,6 @@ export const getAllHalls = async (req, res) => {
       limit = 10
     } = req.query;
 
-    // Build filter
     let filter = { isAvailable: true };
 
     if (location) filter.location = { $regex: location, $options: 'i' };
@@ -138,7 +126,6 @@ export const getAllHalls = async (req, res) => {
       ];
     }
 
-    // Pagination
     const skip = (page - 1) * limit;
 
     const halls = await hallModel.find(filter)
@@ -168,9 +155,6 @@ export const getAllHalls = async (req, res) => {
   }
 };
 
-// @desc    Get single hall by ID
-// @route   GET /api/halls/:id
-// @access  Public
 export const getHallById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -185,14 +169,12 @@ export const getHallById = async (req, res) => {
       return sendNotFound(res, "Hall not found");
     }
 
-    // Fetch reviews
     const reviews = await reviewModel.find({ businessId: id, businessType: 'Hall', isActive: true })
       .populate('userId', 'name avatar profilePicture')
       .sort({ createdAt: -1 })
       .limit(10)
       .lean();
 
-    // Stats calculation
     const stats = await reviewModel.aggregate([
       { $match: { businessId: new mongoose.Types.ObjectId(id), businessType: 'Hall', isActive: true } },
       {
@@ -215,7 +197,6 @@ export const getHallById = async (req, res) => {
 
     const averageRating = totalCount > 0 ? Number((sumRating / totalCount).toFixed(1)) : 0;
 
-    // Standardized response for premium UI
     const result = {
       _id: hall._id,
       name: hall.name,
@@ -264,7 +245,7 @@ export const getPopularHalls = async (req, res) => {
     const popularHalls = await hallModel
       .find({
         isAvailable: true,
-        rating: { $gte: 4 } // Only halls with rating 4+ 
+        rating: { $gte: 4 }
       })
       .select('name actualPrice discountPrice location type category capacity amenities image rating reviewCount')
       .sort({
@@ -273,9 +254,8 @@ export const getPopularHalls = async (req, res) => {
         createdAt: -1
       })
       .limit(parseInt(limit))
-      .populate('adminId', 'name email'); // Populate admin info if needed
+      .populate('adminId', 'name email');
 
-    // If no high-rated halls, get recently added available halls
     if (popularHalls.length === 0) {
       const recentHalls = await hallModel
         .find({ isAvailable: true })
@@ -334,7 +314,6 @@ export const updateHall = async (req, res) => {
       });
     }
 
-    // Check if admin owns this hall
     if (hall.createdBy.toString() !== req.admin._id.toString()) {
       return res.status(403).json({
         success: false,
@@ -342,12 +321,9 @@ export const updateHall = async (req, res) => {
       });
     }
 
-    // File uploads
     const imageFile = req.files?.image?.[0] || req.files?.featured?.[0] || req.files?.images?.[0];
 
-    // Update image if provided
     if (imageFile) {
-      // Delete old image
       if (hall.image) {
         const oldImageKey = hall.image.split(".amazonaws.com/")[1];
         if (oldImageKey) {
@@ -363,7 +339,6 @@ export const updateHall = async (req, res) => {
       );
     }
 
-    // Parse JSON fields
     const parseArray = (value) => {
       if (typeof value === 'string') {
         try {
@@ -375,7 +350,6 @@ export const updateHall = async (req, res) => {
       return value;
     };
 
-    // Update fields
     if (name !== undefined) hall.name = name.trim();
     if (description !== undefined) hall.description = description.trim();
     if (actualPrice !== undefined) hall.actualPrice = Number(actualPrice);
@@ -417,7 +391,6 @@ export const deleteHall = async (req, res) => {
       });
     }
 
-    // Check if admin owns this hall
     if (hall.adminId.toString() !== req.admin._id.toString()) {
       return res.status(403).json({
         success: false,
@@ -425,7 +398,6 @@ export const deleteHall = async (req, res) => {
       });
     }
 
-    // ✅ Remove hall ID from admin model before deleting
     if (hall.adminId) {
       await adminModel.findByIdAndUpdate(
         hall.adminId,
@@ -434,16 +406,13 @@ export const deleteHall = async (req, res) => {
       ).catch(err => log.warn("Failed to remove hall from admin:", err.message));
     }
 
-    // Collect all images to delete from S3
     const imagesToDelete = [];
 
-    // Image
     if (hall.image) {
       const key = hall.image.split(".amazonaws.com/")[1];
       if (key) imagesToDelete.push(key);
     }
 
-    // Delete all images from S3
     if (imagesToDelete.length > 0) {
       await Promise.allSettled(imagesToDelete.map((key) => deleteFromS3(key)));
       log.info(`Deleted ${imagesToDelete.length} images from S3 for hall: ${req.params.id}`);
@@ -526,7 +495,6 @@ export const getPreviewBillingOfHall = async (req, res) => {
     const formatToAMPM = (timeStr) => {
       if (!timeStr) return null;
 
-      // Clean the string and extract components
       const match = timeStr.toLowerCase().match(/(\d{1,2}):(\d{2})\s*(am|pm)?/);
       if (!match) return { time: timeStr, ampm: null };
 
@@ -609,9 +577,6 @@ export const getPreviewBillingOfHall = async (req, res) => {
   }
 };
 
-// @desc    Get all halls created by the logged-in admin
-// @route   GET /api/getAdminHalls
-// @access  Private (Admin)
 export const getAdminHalls = async (req, res) => {
   try {
     const adminId = req.admin._id;

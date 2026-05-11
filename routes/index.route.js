@@ -27,7 +27,6 @@ import { createTour, deleteTour, getAllTours, getBestOfferTours, getTourById, up
 import { createCoupan, deleteCoupan, getAllCoupans, getCoupanById, toggleCoupanStatus, updateCoupan, applyCoupon, removeCoupon } from '../controller/coupan.controller.js';
 import { createOffer, deleteOffer, getAllOffers, getOfferById, toggleOfferStatus, updateOffer } from '../controller/offer.controller.js';
 import { getMyPaymentsAndRefunds } from '../controller/payments.controller.js';
-
 import { downloadBookingInvoice } from '../controller/invoice.controller.js';
 import { getTrendingDestinations, WhatsNew, getCoffeeDates, getBrowseByPropertyTypes, getSpecialOffers, getLuxuryStays } from '../controller/home.controller.js';
 import { createNotification, deleteMyNotification, deleteNotification, getAllNotifications, getMyNotifications, getNotificationById, markAsRead, updateNotification } from '../controller/notification.controller.js';
@@ -36,25 +35,18 @@ import { createThemeCategory, deleteThemeCategory, getAllThemeCategories, getThe
 import { getMyBookingsUnified } from '../controller/my.bookings.controller.js';
 import { getFilteredResults } from '../controller/filter.controller.js';
 
-
-
-
-
 const indexRouter = express.Router();
 
-//auth section
 indexRouter.post("/userRegister", newUserRegister);
 indexRouter.post("/userLogin", userLogin);
 indexRouter.post("/googleLogin", googleLogin);
 indexRouter.post("/forgotOtp", ForgotOtpSend);
 indexRouter.post("/verifyOtp", VerifyOtp);
 indexRouter.post("/resetPassword", ResetPassword);
-// --------------------------------------------------------
 indexRouter.get("/getAllUsers", getAllUsers);
 indexRouter.get("/getUserById/:id", getUserById);
 indexRouter.put("/updateUser/:id", upload.single("avatar"), updateUser);
 
-// Global Filter
 indexRouter.get("/filter", getFilteredResults);
 
 indexRouter.post("/addAddress", UserAuth, addUserAddress);
@@ -65,15 +57,12 @@ indexRouter.delete("/deleteUser/:id", deleteUser);
 
 indexRouter.post("/changeUserPassword", UserAuth, changeUserPassword)
 indexRouter.post("/logout", UserAuth, userLogout)
-//profile section
 indexRouter.get("/userProfile", UserAuth, getUserProfile)
 
-//wallet section
 indexRouter.get("/wallet", UserAuth, getWalletDetails);
 indexRouter.post("/wallet/addMoney", UserAuth, addMoneyToWallet);
 indexRouter.post("/wallet/verifyPayment", UserAuth, verifyWalletPayment);
 
-//admin routes section
 indexRouter.post("/newAdminRegister", newAdminRegister);
 indexRouter.post("/adminLogin", adminLogin);
 indexRouter.get("/allAdmin", AdminAuth, getAllAdmins);
@@ -81,7 +70,6 @@ indexRouter.get("/getAdminById/:adminId", getAdminById);
 indexRouter.patch("/adminUpdate/:adminId", adminUpdate);
 indexRouter.delete("/deleteAdmin/:adminId", deleteAdmin);
 
-//home Page api's
 indexRouter.get("/WhatsNew", WhatsNew)
 indexRouter.get('/trending-destinations', getTrendingDestinations);
 indexRouter.get('/coffee-dates', getCoffeeDates);
@@ -89,21 +77,14 @@ indexRouter.get('/browse-by-property-type', getBrowseByPropertyTypes);
 indexRouter.get('/special-offers', getSpecialOffers);
 indexRouter.get('/luxury-stays', getLuxuryStays);
 
-
-
-
-
-//hotel section
 indexRouter.post("/createNewHotel", AdminAuth, uploadFiles, handleMulterErrors, processAndUploadImages, createNewHotel);
 indexRouter.get("/getAllHotels", getAllHotels);
 indexRouter.get("/getHotelById/:hotelId", getHotelById);
 indexRouter.patch("/updateHotel/:hotelId", AdminAuth, uploadFiles, updateHotel);
 indexRouter.delete("/deleteHotel/:hotelId", AdminAuth, deleteHotels);
-//gethotelBy city name
 indexRouter.get("/getHotelByCityName/:name", getHotelByCityName);
 indexRouter.get("/city-suggestions", getCitySuggestions);
 
-//hotel. booking section
 indexRouter.post("/hotel/createBooking/:hotelId", UserAuth, createBooking);
 indexRouter.post("/hotel/previewBooking/:hotelId", UserAuth, previewHotelBooking);
 indexRouter.get("/hotel/MyBookings", UserAuth, getMyHotelBookings);
@@ -112,16 +93,13 @@ indexRouter.patch("/hotel/updatePaymentStatus/:bookingId", AdminAuth, updateHote
 indexRouter.patch("/hotel/updateBookingStatus/:id", AdminAuth, updateHotelBookingStatus);
 indexRouter.put("/hotel/cancel/:bookingId", UserAuth, cancelHotelBooking);
 
-//watchlist
 indexRouter.post("/addToWatchlist", UserAuth, addToWatchlist);
 indexRouter.get("/getWatchlist", UserAuth, getMyWatchlist);
 indexRouter.delete("/removeFromWatchlist", UserAuth, removeWatchlistItem);
 
-//cafe theme & Category;
 indexRouter.get("/cafeThemes", cafeThemes);
 indexRouter.get("/getCafesByTheme", getCafesByTheme);
 
-// Theme Category Management
 indexRouter.post("/createThemeCategory", AdminAuth, upload.single("image"), createThemeCategory);
 indexRouter.get("/getAllThemeCategories", getAllThemeCategories);
 indexRouter.get("/getThemeCategory/:id", getThemeCategory);
@@ -129,8 +107,6 @@ indexRouter.get("/getThemesByArea", getThemesByArea);
 indexRouter.put("/updateThemeCategory/:id", AdminAuth, upload.single("image"), updateThemeCategory);
 indexRouter.delete("/deleteThemeCategory/:id", AdminAuth, deleteThemeCategory);
 
-
-//cafe booking & list section
 indexRouter.get("/getAllCafes", getAllCafes);
 indexRouter.get("/search", searchCafes);
 indexRouter.get("/mainSearchCafes", mainSearchCafes);
@@ -138,66 +114,50 @@ indexRouter.get("/location", getCafesByLocation);
 indexRouter.get("/popular", getPopularCafes);
 indexRouter.get("/getCafeById/:id", getCafeById);
 
-// Protected routes (require authentication)
 indexRouter.post("/createCafe", AdminAuth, upload.any(), createNewCafe);
 indexRouter.put("/updateCafe/:id", AdminAuth, upload.any(), updateCafe);
 indexRouter.delete("/deleteCafe/:id", AdminAuth, deleteCafe);
 indexRouter.post("/addCafeImage/:id/images", AdminAuth, upload.array('images', 10), addCafeImages);
 indexRouter.delete("/removeCafeImage/:id/images/:imageUrl", AdminAuth, removeCafeImage);
 
-
-// User routes (require authentication)
 indexRouter.post("/createCafeBooking/:cafeId", UserAuth, createCafeBooking);
 indexRouter.get("/my-cafe-bookings", UserAuth, getUserBookings);
 indexRouter.get("/getBookingById/:id", UserAuth, getBookingById);
 indexRouter.put("/cancelBooking/:bookingId", UserAuth, cancelBooking);
-// In your routes file
 indexRouter.post("/preview-booking/:cafeId", previewCafeBooking);
-// Admin routes
 indexRouter.get("/cafe/:cafeId", AdminAuth, getCafeBookings);
 indexRouter.put("/cafe/updateBookingStatus/:id", AdminAuth, updateBookingStatus);
 indexRouter.put("/cafe/updatePaymentStatus/:id", AdminAuth, updatePaymentStatus);
 
-
-//restro section
 indexRouter.post("/createNewRestro", AdminAuth, upload.array("images", 10), validateRestroDuplicate, createNewRestaurant);
 indexRouter.get("/getAllRestros", getAllRestos);
 indexRouter.get("/getRestroById/:id", getSingleRestro);
 
-// UPDATE restaurant
 indexRouter.put("/updateRestro/:id", AdminAuth, upload.array("images", 10), updateRestaurant);
 indexRouter.post("/addRestroImage/:id/images", AdminAuth, upload.array('images', 10), addRestroImages);
 indexRouter.delete("/removeRestroImage/:id/images/:imageUrl", AdminAuth, removeRestroImage);
 indexRouter.delete("/deleteRestro/:id", AdminAuth, deleteRestaurant);
 indexRouter.get("/resto/filter/advanced", filterRestaurants);
-//search restro
 indexRouter.get("/restro/search", searchRestaurants);
 indexRouter.get("/restro/changeStatus/:id", AdminAuth, restroChangeStatus);
 indexRouter.get("/restro/popular", getPopularRestros);
 indexRouter.get("/getRestrosByTheme", getRestrosByTheme);
 
-// user side
 indexRouter.post("/restro/preview-booking/:restaurantId", previewRestroBooking);
 indexRouter.post("/createRestroBooking/:restaurantId", UserAuth, createRestaurantBooking);
 indexRouter.get("/my-restro-bookings", UserAuth, getUserRestaurantBookings);
 indexRouter.get("/getRestaurantBookingById/:bookingId", getRestaurantBookingById);
 indexRouter.put("/cancelRestroBooking/:bookingId", UserAuth, cancelRestaurantBooking);
 
-// Admin routes (restro Booking)
 indexRouter.get("/restro/:restroId", AdminAuth, getRestaurantBookings);
 indexRouter.put("/updateRestroBookingStatus/:bookingId", AdminAuth, updateRestaurantBookingStatus);
 indexRouter.put("/updateRestroPaymentStatus/:bookingId", AdminAuth, updateRestaurantPaymentStatus);
 
-//hall section / find & booking
 indexRouter.get('/getAllHalls', getAllHalls);
 indexRouter.get('/getPopularHalls', getPopularHalls);
 indexRouter.get('/getHallById/:id', getHallById);
 indexRouter.post("/preview/billing/:hallId", UserAuth, getPreviewBillingOfHall)
 
-
-
-// hall CRUD (admin Side)
-// Route with proper middleware chain
 indexRouter.post("/createHall", AdminAuth, upload.fields([
   { name: "image", maxCount: 1 },
   { name: "featured", maxCount: 1 },
@@ -206,13 +166,11 @@ indexRouter.post("/createHall", AdminAuth, upload.fields([
 
 indexRouter.put('/updateHall/:id', AdminAuth, upload.any(), updateHall);
 indexRouter.delete('/deleteHall/:id', AdminAuth, deleteHall);
-//booking of all
 indexRouter.post('/createHallBooking/:hallId', UserAuth, createHallBooking);
 indexRouter.get('/myHallbookings', UserAuth, getUserHallBookings);
 indexRouter.get('/getHallBookingById/:id', UserAuth, getHallBookingById);
 indexRouter.put('/cancelHallBooking/:id', UserAuth, cancelHallBooking);
 
-// Admin side Hall routes
 indexRouter.get("/admin/hallBookingStatistics", AdminAuth, getHallBookingStatistics);
 indexRouter.get("/admin/hallBookings", AdminAuth, getHallBookings);
 indexRouter.patch("/updateHallBookingStatus/:id", AdminAuth, updateHallBookingStatus);
@@ -222,23 +180,18 @@ indexRouter.patch("/admin/hall/check-in/:id", AdminAuth, hallCheckIn);
 indexRouter.patch("/admin/hall/check-out/:id", AdminAuth, hallCheckOut);
 indexRouter.get('/admin/getHallBookingById/:id', AdminAuth, getHallBookingById);
 
-
-//activitys section
-// 1. get all vistion places
 indexRouter.get("/allCountries", getAllCountries)
 indexRouter.get("/getCityByCountry/:country", getCityByCountry);
 indexRouter.get("/getHotelByCity/:city", getHotelByCity);
 indexRouter.get("/searchHotels", searchHotels)
 indexRouter.get("/mainSearchHotels", mainSearchHotels)
 
-// Featured Event routes (Upper Section - 5 APIs)
 indexRouter.get("/getAllFeaturedEvents", getAllFeaturedEvents);
 indexRouter.get("/getFeaturedEventById/:id", getFeaturedEventById);
 indexRouter.post("/addNewFeaturedEvent", AdminAuth, upload.fields([{ name: 'image', maxCount: 1 }]), addNewFeaturedEvent);
 indexRouter.put("/updateFeaturedEvent/:id", AdminAuth, upload.fields([{ name: 'image', maxCount: 1 }]), updateFeaturedEvent);
 indexRouter.delete("/deleteFeaturedEvent/:id", AdminAuth, deleteFeaturedEvent);
 
-// Regular Event routes (Lower Section - 5 APIs)
 indexRouter.get("/getAllEvents", getAllEvents);
 indexRouter.get("/searchEvents", searchEvents);
 indexRouter.get("/filterEvents", filterEvents);
@@ -249,8 +202,6 @@ indexRouter.put("/updateEvent/:id", AdminAuth, upload.fields([{ name: 'eventImag
 indexRouter.delete("/deleteEvent/:id", AdminAuth, deleteEvent);
 indexRouter.post("/bulk-delete", UserAuth, bulkDeleteEvents);
 
-
-//package tour section
 indexRouter.post("/createNewTour", uploadTourImage, AdminAuth, createTour);
 indexRouter.get("/getAllTours", AdminAuth, getAllTours);
 indexRouter.get("/tour/best-offers", getBestOfferTours);
@@ -259,14 +210,11 @@ indexRouter.put("/updateTour/:id", uploadTourImage, AdminAuth, updateTour);
 indexRouter.patch("/updateTourImage/:id", uploadTourImage, updateTourImage);
 indexRouter.delete("/deleteTour/:id", deleteTour);
 
-//payemnt and all booking in single api not model created!!
 indexRouter.get("/payments-and-refunds", UserAuth, getMyPaymentsAndRefunds);
 indexRouter.get("/myBookings/unified", UserAuth, getMyBookingsUnified);
 
-
 indexRouter.get("/business/:businessId", getBusinessReviews);
 
-// review
 indexRouter.post("/addReview/:businessId", UserAuth, upload.fields([{ name: 'media', maxCount: 10 }]), addReview);
 indexRouter.get("/myReview", UserAuth, getUserReviews);
 indexRouter.delete("/review/delete/:reviewId", AdminAuth, deleteReview);
@@ -275,7 +223,6 @@ indexRouter.post("/review/like/:reviewId", UserAuth, likeReview);
 indexRouter.post("/review/dislike/:reviewId", UserAuth, dislikeReview);
 indexRouter.get("/getAllReviews", getAllReviews);
 
-//coupon section
 indexRouter.post("/createCoupan", AdminAuth, createCoupan);
 indexRouter.get("/getAllCoupans", getAllCoupans);
 indexRouter.get("/getCoupanById/:id", getCoupanById);
@@ -285,7 +232,6 @@ indexRouter.patch("/toggleCoupanStatus/:id", AdminAuth, toggleCoupanStatus);
 indexRouter.post("/applyCoupon", UserAuth, applyCoupon);
 indexRouter.post("/removeCoupon", UserAuth, removeCoupon);
 
-//offer section
 indexRouter.post("/createOffer", AdminAuth, upload.single("backgroundImage"), createOffer);
 indexRouter.get("/getAllOffers", getAllOffers);
 indexRouter.get("/getOfferById/:id", getOfferById);
@@ -293,13 +239,11 @@ indexRouter.put("/updateOffer/:id", AdminAuth, upload.single("backgroundImage"),
 indexRouter.delete("/deleteOffer/:id", AdminAuth, deleteOffer);
 indexRouter.patch("/toggleOfferStatus/:id", AdminAuth, toggleOfferStatus);
 
-// ─── Hourly Stay – Admin CRUD ──────────────────────────────────────────────
 indexRouter.post("/createStay", AdminAuth, upload.fields([{ name: "stayImage", maxCount: 5 }, { name: "images", maxCount: 5 }]), createStay);
 indexRouter.put("/updateStay/:id", AdminAuth, upload.fields([{ name: "stayImage", maxCount: 5 }, { name: "images", maxCount: 5 }]), updateStay);
 indexRouter.delete("/deleteStay/:id", AdminAuth, deleteStay);
 indexRouter.get("/getAdminStays", AdminAuth, getAdminStays);
 
-// ─── Hourly Stay – Admin Bookings ──────────────────────────────────────────
 indexRouter.get("/admin/stayBookings", AdminAuth, getAdminStayBookings);
 indexRouter.get("/admin/stayBookingStatistics", AdminAuth, getStayBookingStatistics);
 indexRouter.get("/admin/getStayBookingById/:id", AdminAuth, getStayBookingById);
@@ -308,7 +252,6 @@ indexRouter.patch("/updateStayPaymentStatus/:id", AdminAuth, updateStayPaymentSt
 indexRouter.patch("/admin/stay/check-in/:id", AdminAuth, stayCheckIn);
 indexRouter.patch("/admin/stay/check-out/:id", AdminAuth, stayCheckOut);
 
-// ─── Hourly Stay – User Routes ─────────────────────────────────────────────
 indexRouter.get("/getAllStays", getAllStays);
 indexRouter.get("/getStayById/:id", getStayById);
 indexRouter.post("/stay/preview-booking/:stayId", UserAuth, previewStayBooking);
@@ -317,27 +260,16 @@ indexRouter.get("/my-stay-bookings", UserAuth, getUserStayBookings);
 indexRouter.get("/getStayBookingById/:id", UserAuth, getStayBookingById);
 indexRouter.patch("/cancelStayBooking/:id", UserAuth, cancelStayBooking);
 
-
-
-
-// notification section & routes
 indexRouter.post("/createNotification", AdminAuth, createNotification);
 indexRouter.get("/getAllNotifications", AdminAuth, getAllNotifications);
 indexRouter.get("/getNotificationById/:id", getNotificationById);
 indexRouter.put("/updateNotification/:id", AdminAuth, updateNotification);
 indexRouter.delete("/deleteNotification/:id", AdminAuth, deleteNotification);
 
-// Users can view their notifications
 indexRouter.get("/my/notifications", UserAuth, getMyNotifications);
 indexRouter.patch("/markNotificationAsRead/:id", UserAuth, markAsRead);
 indexRouter.delete("/deleteMyNotification/:id", UserAuth, deleteMyNotification);
 
-
-
-
-
-
-//all list out of S3 images
 indexRouter.get("/s3/list", async (req, res) => {
   try {
     const allUrls = await listAllS3Images();
@@ -348,7 +280,6 @@ indexRouter.get("/s3/list", async (req, res) => {
   }
 });
 
-//delete image from S3
 indexRouter.delete("/s3/delete", async (req, res) => {
   const { imageUrl } = req.body;
   if (!imageUrl) {
@@ -384,7 +315,6 @@ indexRouter.delete("/s3/delete-multiple", async (req, res) => {
       return sendBadRequest(res, "No valid S3 keys found in images array");
     }
 
-    // Delete all keys
     const results = await Promise.allSettled(keys.map((key) => deleteFromS3(key)));
 
     const success = [];

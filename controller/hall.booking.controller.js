@@ -93,7 +93,6 @@ export const createHallBooking = async (req, res) => {
     const user = await userModel.findById(userId);
     if (!user) return sendNotFound(res, "User not found");
 
-    // Wallet Balance Check
     if (normalizedPaymentMethod === "Wallet") {
       if ((user.walletBalance || 0) < finalAmount) {
         return res.status(400).json({
@@ -437,7 +436,7 @@ export const checkInGuest = async (req, res) => {
       return sendBadRequest(res, "Only confirmed bookings can be checked in");
     }
 
-    booking.bookingStatus = 'Completed'; // For halls, check-in often marks the event as active/done
+    booking.bookingStatus = 'Completed';
     await booking.save();
 
     return sendSuccess(res, "Guest checked in successfully", [booking]);

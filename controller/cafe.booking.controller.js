@@ -6,12 +6,10 @@ import { v4 as uuidv4 } from "uuid";
 import log from "../utils/logger.js";
 import coupanModel from "../model/coupan.model.js";
 import { sendNotification } from "../utils/notification.utils.js";
-
 import userModel from "../model/user.model.js";
 import WalletTransactionModel from "../model/wallet.transaction.model.js";
 import Stripe from "stripe";
 
-// Create new cafe booking
 export const createCafeBooking = async (req, res) => {
   try {
     if (!process.env.STRIPE_SECRET) {
@@ -35,12 +33,11 @@ export const createCafeBooking = async (req, res) => {
       numberOfRooms = 1,
       specialRequests = "",
       timeSlot,
-      paymentMethod = "Stripe", // Can be 'Stripe' or 'Wallet'
+      paymentMethod = "Stripe",
       transactionId = "",
       paymentStatus = "pending",
     } = req.body;
 
-    // Validation
     if (!cafeId || !checkInDate || !checkOutDate || !timeSlot) {
       return res.status(400).json({
         success: false,
@@ -65,7 +62,6 @@ export const createCafeBooking = async (req, res) => {
     const checkIn = parseDate(checkInDate);
     const checkOut = parseDate(checkOutDate);
 
-    // Prevent booking in past
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (checkIn < today) {
@@ -75,7 +71,6 @@ export const createCafeBooking = async (req, res) => {
       });
     }
 
-    // Check slot availability
     const existingBooking = await cafeBookingModel.findOne({
       cafeId,
       checkInDate: checkIn,
@@ -90,7 +85,6 @@ export const createCafeBooking = async (req, res) => {
       });
     }
 
-    // ---------------- Billing Logic (Hotel Style) ---------------- //
     const guestRate = cafe.pricing?.discountPrice || 200;
     const totalGuests = Number(adults) + Number(children);
     const totalGuestRate = guestRate * totalGuests * Number(numberOfRooms);
@@ -100,7 +94,6 @@ export const createCafeBooking = async (req, res) => {
     const discountAmount = (actualPrice * discountPercentage) / 100;
     const discountPrice = actualPrice - discountAmount;
 
-    // 🎟️ Coupon Logic
     let couponDetails = null;
     let amountAfterCoupon = discountPrice;
     if (couponCode) {
@@ -120,7 +113,6 @@ export const createCafeBooking = async (req, res) => {
     const taxesAndFeesAmount = (amountAfterCoupon * taxesAndFeesPercentage) / 100;
     const totalAmount = amountAfterCoupon + taxesAndFeesAmount;
 
-    // Optional rounding for cleaner values
     const round = (num) => Math.round(num * 100) / 100;
 
     const finalPricing = {
@@ -139,7 +131,6 @@ export const createCafeBooking = async (req, res) => {
       couponCode: couponDetails ? couponDetails.code : null,
     };
 
-    // ---------------- Guest Info Logic (Hotel Style) ---------------- //
     const normalizedPaymentMethod = paymentMethod ? paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1).toLowerCase() : "Stripe";
 
     let guestInfo = {};
@@ -171,7 +162,6 @@ export const createCafeBooking = async (req, res) => {
       country: isMySelf ? guestInfo.country : "",
     };
 
-    // 💰 WALLET BALANCE CHECK
     if (normalizedPaymentMethod === "Wallet") {
       if ((dbUser.walletBalance || 0) < totalAmount) {
         return res.status(400).json({
@@ -181,7 +171,6 @@ export const createCafeBooking = async (req, res) => {
       }
     }
 
-    // ---------------- Create Booking ---------------- //
     const newBooking = new cafeBookingModel({
       bookingId: uuidv4(),
       userId,
@@ -223,8 +212,6 @@ export const createCafeBooking = async (req, res) => {
       reference: { bookingId: savedBooking._id, cafeId: cafe._id }
     }).catch((err) => console.error("Notification Error:", err.message));
 
-
-    // Wallet Payment Processing
     if (normalizedPaymentMethod === "Wallet") {
       dbUser.walletBalance -= totalAmount;
       await dbUser.save();
@@ -250,7 +237,6 @@ export const createCafeBooking = async (req, res) => {
       });
     }
 
-    // Stripe Payment Initialization
     if (normalizedPaymentMethod === "Stripe") {
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
@@ -305,13 +291,11 @@ export const createCafeBooking = async (req, res) => {
   }
 };
 
-// Get all bookings for a user
 export const getUserBookings = async (req, res) => {
   try {
     const userId = req.user?._id;
     const { page = 1, limit = 10, status } = req.query;
 
-    // Build filter
     const filter = { userId };
     if (status && ["pending", "confirmed", "cancelled", "completed"].includes(status)) {
       filter.bookingStatus = status;
@@ -346,7 +330,6 @@ export const getUserBookings = async (req, res) => {
   }
 };
 
-// Get all bookings for a cafe (for cafe owners/admins)
 export const getCafeBookings = async (req, res) => {
   try {
     const adminId = req.admin?._id;
@@ -391,7 +374,6 @@ export const getCafeBookings = async (req, res) => {
   }
 };
 
-// Get booking by ID
 export const getBookingById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -500,7 +482,6 @@ export const previewCafeBooking = async (req, res) => {
     const discountAmount = (actualPrice * discountPercentage) / 100;
     const discountPrice = actualPrice - discountAmount;
 
-    // 🎟️ Coupon Logic
     let couponDetails = null;
     let amountAfterCoupon = discountPrice;
     if (couponCode) {
@@ -523,10 +504,8 @@ export const previewCafeBooking = async (req, res) => {
     const taxesAndFeesAmount = (amountAfterCoupon * taxesAndFeesPercentage) / 100;
     const totalAmount = amountAfterCoupon + taxesAndFeesAmount;
 
-    // Rounding helper
     const round = (num) => Math.round(num * 100) / 100;
 
-    // ✅ Response (Hotel Style)
     return res.status(200).json({
       success: true,
       message: "Cafe booking preview generated successfully",
@@ -599,7 +578,6 @@ export const previewCafeBooking = async (req, res) => {
   }
 };
 
-// Update booking status
 export const updateBookingStatus = async (req, res) => {
   try {
     const adminId = req.admin?._id;
@@ -624,7 +602,6 @@ export const updateBookingStatus = async (req, res) => {
     const previousStatus = booking.bookingStatus.toLowerCase();
     const newStatus = finalStatus.toLowerCase();
 
-    // If changing to cancelled and it was confirmed/paid, process refund
     if (newStatus === "cancelled" && previousStatus !== "cancelled") {
       const isPaid = booking.payment.paymentStatus === "completed" || booking.payment.paymentStatus === "confirmed";
       if (isPaid) {
@@ -664,7 +641,6 @@ export const updateBookingStatus = async (req, res) => {
   }
 };
 
-// Update payment status
 export const updatePaymentStatus = async (req, res) => {
   try {
     const adminId = req.admin?._id;
@@ -687,7 +663,6 @@ export const updatePaymentStatus = async (req, res) => {
     const previousPaymentStatus = booking.payment.paymentStatus.toLowerCase();
     const newPaymentStatus = finalStatus.toLowerCase();
 
-    // If changing to cancelled and it was previously paid, process refund
     if (newPaymentStatus === "cancelled" && (previousPaymentStatus === "completed" || previousPaymentStatus === "confirmed")) {
       const amountToRefund = booking.pricing.totalAmount;
       const user = await userModel.findById(booking.userId);
@@ -730,7 +705,6 @@ export const updatePaymentStatus = async (req, res) => {
   }
 };
 
-// Cancel booking
 export const cancelBooking = async (req, res) => {
   try {
     const { bookingId } = req.params;
@@ -751,7 +725,6 @@ export const cancelBooking = async (req, res) => {
       });
     }
 
-    // Validate booking status
     const validStatuses = ["Upcoming", "Completed", "Cancelled", "Refunded"];
     if (!validStatuses.includes(booking.bookingStatus)) {
       return res.status(400).json({
@@ -760,7 +733,6 @@ export const cancelBooking = async (req, res) => {
       });
     }
 
-    // Check if user is authorized
     const userId = req.user?._id;
     const isAdmin = req.user?.role === "admin";
     if (!isAdmin && booking.userId.toString() !== userId.toString()) {
@@ -770,7 +742,6 @@ export const cancelBooking = async (req, res) => {
       });
     }
 
-    // Check if booking can be cancelled
     if (booking.bookingStatus === "Cancelled") {
       return res.status(400).json({
         success: false,
@@ -787,43 +758,43 @@ export const cancelBooking = async (req, res) => {
     const isPaid = booking.payment.paymentStatus === "completed" || booking.payment.paymentStatus === "confirmed";
     const amountToRefund = booking.pricing.totalAmount;
 
-    // Update booking status
     booking.bookingStatus = "Cancelled";
 
     if (isPaid) {
       booking.payment.paymentStatus = "refunded";
 
-      // Credit amount back to user's wallet
       const user = await userModel.findById(booking.userId);
       if (user) {
         user.walletBalance = (user.walletBalance || 0) + amountToRefund;
         await user.save();
 
-        // Record wallet transaction
         const wTxn = new WalletTransactionModel({
-          userId: booking.userId,
+          userId: user._id,
           amount: amountToRefund,
           type: "credit",
-          description: `Refund for Cafe Booking (Cancelled by User) - ${booking.bookingId || booking._id}`,
+          description: `Refund for Cafe Booking - ${booking.bookingId || booking._id}`,
           status: "completed"
         });
         await wTxn.save();
+
+        booking.payment.transactionId = wTxn._id.toString();
       }
-    } else {
-      booking.payment.paymentStatus = "cancelled";
     }
 
-    booking.cancelledAt = new Date();
     await booking.save();
+
+    await sendNotification({
+      userId: booking.userId,
+      title: "Booking Cancelled ❌",
+      message: `Your booking for booking ID ${booking.bookingId} has been cancelled successfully. ${isPaid ? 'Refund has been credited to your wallet.' : ''}`,
+      type: "CAFE_BOOKING_CANCEL",
+      reference: { bookingId: booking._id }
+    }).catch(err => console.error("Cancel Notification Error:", err.message));
 
     return res.status(200).json({
       success: true,
-      message: isPaid ? "Booking cancelled and refund processed to wallet successfully" : "Booking cancelled successfully",
-      data: {
-        bookingId: booking._id,
-        refundAmount: isPaid ? amountToRefund : 0,
-        paymentStatus: booking.payment.paymentStatus
-      }
+      message: "Booking cancelled successfully",
+      data: booking,
     });
   } catch (error) {
     console.error("Cancel Booking Error:", error);

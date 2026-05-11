@@ -4,7 +4,6 @@ import hotelModel from "../model/hotel.model.js";
 import { sendBadRequest, sendError, sendNotFound, sendSuccess } from "../utils/responseUtils.js";
 import coupanModel from "../model/coupan.model.js";
 import { sendNotification } from "../utils/notification.utils.js";
-
 import userModel from "../model/user.model.js";
 import Stripe from "stripe";
 import WalletTransactionModel from "../model/wallet.transaction.model.js";
@@ -33,13 +32,11 @@ export const createBooking = async (req, res) => {
       specialRequests = "",
       transactionId = "",
       paymentStatus = "pending",
-      paymentMethod = "Stripe" // Can be 'Stripe' or 'Wallet'
+      paymentMethod = "Stripe"
     } = req.body;
 
     const hotel = await hotelModel.findById(hotelId);
     if (!hotel) return res.status(404).json({ success: false, message: "Hotel not found" });
-
-    // No roomId needed anymore
 
     const parseDate = (d) => {
       const [day, month, year] = d.split("-");
@@ -54,23 +51,20 @@ export const createBooking = async (req, res) => {
       Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24))
     );
 
-    const roomRatePerNight = hotel.discountPrice; // Using the hotel's discount price as base
+    const roomRatePerNight = hotel.discountPrice;
     const totalRoomRate = roomRatePerNight * numberOfNights * numberOfRooms;
 
-    // Fixed mandatory 10% discount logic on top of the offered price
     const actualPrice = totalRoomRate;
     const discountPercentage = 10;
     const discountAmount = (actualPrice * discountPercentage) / 100;
     const discountPrice = actualPrice - discountAmount;
 
-    // 🎟️ Coupon Logic
     let couponDetails = null;
     let amountAfterCoupon = discountPrice;
 
     if (coupanCode) {
       const coupon = await coupanModel.findOne({ couponCode: coupanCode.toUpperCase(), isActive: true });
       if (coupon) {
-        // Check expiry
         if (!coupon.couponExpire || new Date(coupon.couponExpire) >= new Date()) {
           const couponDiscountPercent = coupon.couponPerc || 0;
           const couponDiscountAmount = (discountPrice * couponDiscountPercent) / 100;
@@ -85,7 +79,6 @@ export const createBooking = async (req, res) => {
       }
     }
 
-    // Tax and Service Fee combined (18% + 5% = 23%)
     const taxesAndFeesPercentage = 23;
     const taxesAndFeesAmount = (amountAfterCoupon * taxesAndFeesPercentage) / 100;
     const totalAmount = amountAfterCoupon + taxesAndFeesAmount;
@@ -99,7 +92,6 @@ export const createBooking = async (req, res) => {
       if (!dbUser) return res.status(404).json({ success: false, message: "User not found" });
 
       if (isMySelf) {
-        // Find default address from the addresses array
         const defaultAddr = dbUser.addresses?.find(a => a.isDefault) || dbUser.addresses?.[0];
 
         user = {
@@ -113,7 +105,6 @@ export const createBooking = async (req, res) => {
       }
     }
 
-    // 💰 WALLET BALANCE CHECK (BEFORE SAVING BOOKING)
     if (normalizedPaymentMethod === "Wallet") {
       const finalTotal = totalAmount;
       if ((dbUser.walletBalance || 0) < finalTotal) {
@@ -123,8 +114,6 @@ export const createBooking = async (req, res) => {
         });
       }
     }
-
-
 
     const booking = new hotelBookingModel({
       userId,
@@ -185,14 +174,11 @@ export const createBooking = async (req, res) => {
       reference: { bookingId: savedBooking._id, hotelId: hotel._id }
     }).catch((err) => console.error("Notification Error:", err.message));
 
-
     if (normalizedPaymentMethod === "Wallet") {
       const finalTotal = totalAmount;
-      // Deduct from wallet
       dbUser.walletBalance -= finalTotal;
       await dbUser.save();
 
-      // Create Wallet Transaction
       const wTxn = new WalletTransactionModel({
         userId,
         amount: finalTotal,
@@ -202,7 +188,6 @@ export const createBooking = async (req, res) => {
       });
       await wTxn.save();
 
-      // Update booking
       savedBooking.payment.paymentMethod = "Wallet";
       savedBooking.payment.paymentStatus = "completed";
       savedBooking.payment.transactionId = wTxn._id.toString();
@@ -216,7 +201,6 @@ export const createBooking = async (req, res) => {
       });
     }
 
-    // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -228,7 +212,7 @@ export const createBooking = async (req, res) => {
               description: `Booking for ${numberOfRooms} Rooms | ${numberOfNights} Nights`,
               images: hotel.images && hotel.images.length > 0 ? [hotel.images[0]] : [],
             },
-            unit_amount: Math.round(totalAmount * 100), // Stripe expects amount in paise (cents)
+            unit_amount: Math.round(totalAmount * 100),
           },
           quantity: 1,
         },
@@ -243,7 +227,6 @@ export const createBooking = async (req, res) => {
       },
     });
 
-    // Update booking with the Stripe session ID
     savedBooking.payment.transactionId = session.id;
     savedBooking.payment.paymentMethod = "Stripe";
     await savedBooking.save();
@@ -260,7 +243,6 @@ export const createBooking = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
-
 
 export const previewHotelBooking = async (req, res) => {
   try {
@@ -297,8 +279,6 @@ export const previewHotelBooking = async (req, res) => {
     const hotel = await hotelModel.findById(hotelId);
     if (!hotel) return res.status(404).json({ success: false, message: "Hotel not found" });
 
-    // No roomId needed anymore
-
     const numberOfNights = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
 
     const TAXES_AND_FEES_PERCENT = 23;
@@ -316,7 +296,6 @@ export const previewHotelBooking = async (req, res) => {
     if (couponCode) {
       const coupon = await coupanModel.findOne({ couponCode: couponCode.toUpperCase(), isActive: true });
       if (coupon) {
-        // Check expiry
         if (!coupon.couponExpire || new Date(coupon.couponExpire) >= new Date()) {
           const couponDiscountPercent = coupon.couponPerc || 0;
           const couponDiscountAmount = (discountPrice * couponDiscountPercent) / 100;
@@ -335,7 +314,6 @@ export const previewHotelBooking = async (req, res) => {
     const taxesAndFeesAmount = (amountAfterCoupon * TAXES_AND_FEES_PERCENT) / 100;
     const totalAmount = amountAfterCoupon + taxesAndFeesAmount;
 
-    // Rounding helper
     const round = (num) => Math.round(num * 100) / 100;
 
     return res.status(200).json({
@@ -414,7 +392,6 @@ export const previewHotelBooking = async (req, res) => {
   }
 };
 
-
 export const getMyHotelBookings = async (req, res) => {
   try {
     const guestId = req.user?._id;
@@ -426,7 +403,6 @@ export const getMyHotelBookings = async (req, res) => {
 
     const now = new Date();
     for (let booking of bookings) {
-      // If check-out date is in the past and booking is not already cancelled/completed
       if (
         ["confirmed", "upcoming", "pending"].includes(booking.bookingStatus.toLowerCase()) &&
         new Date(booking.bookingDates.checkOutDate) < now
@@ -476,7 +452,6 @@ export const hotelAdminBookings = async (req, res) => {
   }
 };
 
-
 export const updateHotelPaymentStatus = async (req, res) => {
   try {
     const adminId = req.admin?._id;
@@ -499,7 +474,6 @@ export const updateHotelPaymentStatus = async (req, res) => {
     const previousPaymentStatus = booking.payment.paymentStatus.toLowerCase();
     const newPaymentStatus = status.toLowerCase();
 
-    // If changing to refunded and it wasn't refunded yet, process refund to wallet
     if (newPaymentStatus === "refunded" && previousPaymentStatus !== "refunded") {
       const amountToRefund = booking.pricing.totalAmount;
       const user = await userModel.findById(booking.userId);
@@ -508,7 +482,6 @@ export const updateHotelPaymentStatus = async (req, res) => {
         user.walletBalance = (user.walletBalance || 0) + amountToRefund;
         await user.save();
 
-        // Record wallet transaction
         const wTxn = new WalletTransactionModel({
           userId: user._id,
           amount: amountToRefund,
@@ -525,14 +498,12 @@ export const updateHotelPaymentStatus = async (req, res) => {
         booking.bookingStatus = "cancelled";
       }
     } 
-    // If changing to cancelled from completed, we just mark it cancelled. Admin has to manually refund it later.
     else if (newPaymentStatus === "cancelled" && (previousPaymentStatus === "completed" || previousPaymentStatus === "confirmed")) {
       booking.payment.paymentStatus = "cancelled";
       booking.bookingStatus = "cancelled";
     } else {
       booking.payment.paymentStatus = newPaymentStatus;
 
-      // If payment is completed or confirmed, also mark the booking as confirmed
       if (newPaymentStatus === "completed" || newPaymentStatus === "confirmed") {
         booking.bookingStatus = "confirmed";
         booking.payment.paymentDate = new Date();
@@ -566,7 +537,6 @@ export const updateHotelBookingStatus = async (req, res) => {
       return sendError(res, 400, "Invalid booking status");
     }
 
-    // Find booking
     const booking = await hotelBookingModel.findOne({ _id: id });
     if (!booking) {
       return sendError(res, 404, "Booking not found");
@@ -575,7 +545,6 @@ export const updateHotelBookingStatus = async (req, res) => {
     const previousStatus = booking.bookingStatus.toLowerCase();
     const newStatus = status.toLowerCase();
 
-    // If changing to cancelled and it was confirmed/paid, process refund
     if (newStatus === "cancelled" && previousStatus !== "cancelled") {
       const isPaid = booking.payment.paymentStatus === "completed" || booking.payment.paymentStatus === "confirmed";
 
@@ -587,7 +556,6 @@ export const updateHotelBookingStatus = async (req, res) => {
           user.walletBalance = (user.walletBalance || 0) + amountToRefund;
           await user.save();
 
-          // Record wallet transaction
           const wTxn = new WalletTransactionModel({
             userId: user._id,
             amount: amountToRefund,
@@ -602,7 +570,6 @@ export const updateHotelBookingStatus = async (req, res) => {
       }
     }
 
-    // Update and save
     booking.bookingStatus = newStatus;
     await booking.save();
 
@@ -630,12 +597,9 @@ export const cancelHotelBooking = async (req, res) => {
     const isPaid = booking.payment.paymentStatus === "completed" || booking.payment.paymentStatus === "confirmed";
     const amountToRefund = booking.pricing.totalAmount;
 
-    // Update booking status
     booking.bookingStatus = "cancelled";
 
     if (isPaid) {
-      // Don't refund instantly. Set payment to cancelled, it will show as 'Pending' in timeline.
-      // Admin will manually update payment status to "refunded" to credit the wallet.
       booking.payment.paymentStatus = "cancelled";
     } else {
       booking.payment.paymentStatus = "cancelled";
