@@ -472,21 +472,42 @@ export const deleteGalleryImage = async (req, res) => {
 export const getPreviewBillingOfHall = async (req, res) => {
   try {
     const { hallId } = req.params;
-    const { numberOfday = 1 } = req.query;
+    const { startDate, endDate, startTime, endTime, peoples } = req.body;
 
     if (!hallId || !mongoose.Types.ObjectId.isValid(hallId)) {
       return sendBadRequest(res, "Invalid hall ID");
     }
 
-    const numberOfDays = parseInt(numberOfday);
-    if (isNaN(numberOfDays) || numberOfDays <= 0) {
-      return sendBadRequest(res, "Number of days must be a positive number");
+    if (!startDate || !endDate) {
+      return sendBadRequest(res, "Start date and end date are required");
+    }
+
+    const convertToDate = (dateString) => {
+      const [day, month, year] = dateString.split('-');
+      return new Date(`${year}-${month}-${day}`);
+    };
+
+    const start = convertToDate(startDate);
+    const end = convertToDate(endDate);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return sendBadRequest(res, "Invalid date format. Please use DD-MM-YYYY");
+    }
+
+    if (end < start) {
+      return sendBadRequest(res, "End date cannot be before start date");
     }
 
     const hall = await hallModel.findById(hallId);
     if (!hall) {
       return sendNotFound(res, "Hall not found");
     }
+
+    if (peoples && Number(peoples) > hall.capacity) {
+      return sendBadRequest(res, `Hall capacity exceeded. Maximum capacity is ${hall.capacity} people.`);
+    }
+
+    const numberOfDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) || 1;
 
     const basePricePerDay = hall.discountPrice || hall.actualPrice;
     const baseSubtotal = basePricePerDay * numberOfDays;
@@ -502,6 +523,34 @@ export const getPreviewBillingOfHall = async (req, res) => {
 
     const round = (num) => Math.round(num * 100) / 100;
 
+    const formatToAMPM = (timeStr) => {
+      if (!timeStr) return null;
+      
+      // Clean the string and extract components
+      const match = timeStr.toLowerCase().match(/(\d{1,2}):(\d{2})\s*(am|pm)?/);
+      if (!match) return { time: timeStr, ampm: null };
+
+      let [_, hours, minutes, ampm] = match;
+      let h = parseInt(hours);
+      
+      if (ampm) {
+        // If ampm was already present, just normalize it
+        return {
+          time: `${h}:${minutes}`,
+          ampm: ampm.toUpperCase()
+        };
+      } else {
+        // If 24-hour format, convert to 12-hour
+        const finalAmpm = h >= 12 ? 'PM' : 'AM';
+        h = h % 12;
+        h = h ? h : 12;
+        return {
+          time: `${h}:${minutes}`,
+          ampm: finalAmpm
+        };
+      }
+    };
+
     const formattedResponse = {
       hallDetails: {
         id: hall._id,
@@ -509,6 +558,13 @@ export const getPreviewBillingOfHall = async (req, res) => {
         type: hall.type,
         address: hall.address,
         image: hall.image || null
+      },
+      bookingDetails: {
+        startDate,
+        endDate,
+        startTime: formatToAMPM(startTime),
+        endTime: formatToAMPM(endTime),
+        peoples: peoples || null
       },
       paymentSummary: {
         title: "Payment Information",

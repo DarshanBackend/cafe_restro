@@ -192,7 +192,7 @@ indexRouter.put("/updateRestroPaymentStatus/:bookingId", AdminAuth, updateRestau
 indexRouter.get('/getAllHalls', getAllHalls);
 indexRouter.get('/getPopularHalls', getPopularHalls);
 indexRouter.get('/getHallById/:id', getHallById);
-indexRouter.get("/preview/billing/:hallId", UserAuth, getPreviewBillingOfHall)
+indexRouter.post("/preview/billing/:hallId", UserAuth, getPreviewBillingOfHall)
 
 
 
