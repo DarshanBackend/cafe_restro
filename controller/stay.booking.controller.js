@@ -679,7 +679,7 @@ export const searchStay = async (req, res) => {
 
     return sendSuccess(res, "Search results retrieved successfully", stays);
   } catch (error) {
-    log.error(`Error While Searching Stays: ${error.message}`);
+    console.log(error)
     return sendError(res, "Error While Searching Stays", error);
   }
 };
