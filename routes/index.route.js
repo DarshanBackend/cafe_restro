@@ -15,7 +15,7 @@ import { cancelBooking, createCafeBooking, getBookingById, getCafeBookings, getU
 import { createNewRestaurant, deleteRestaurant, filterRestaurants, getAllRestos, getSingleRestro, restroChangeStatus, searchRestaurants, updateRestaurant, addRestroImages, removeRestroImage, getRestrosByTheme, getPopularRestros } from '../controller/restro.controller.js';
 import { validateRestroDuplicate } from '../middleware/validateRestroDuplicate.js';
 import { sendBadRequest, sendError, sendSuccess } from '../utils/responseUtils.js';
-import { cancelStayBooking, createStayBooking, getAdminStayBookings, getStayBookingById, getStayBookingStatistics, getUserStayBookings, previewStayBooking, stayCheckIn, stayCheckOut, updateStayBookingStatus, updateStayPaymentStatus } from '../controller/stay.booking.controller.js';
+import { cancelStayBooking, createStayBooking, getAdminStayBookings, getStayBookingById, getUserStayBookings, previewStayBooking, searchStay, updateStayBookingStatus, updateStayPaymentStatus } from '../controller/stay.booking.controller.js';
 import { getAllCountries, getCityByCountry, getHotelByCity } from '../controller/activity.controller.js';
 import { addReview, deleteReview, getAllReviews, getBusinessReviews, getUserReviews, likeReview, dislikeReview } from '../controller/review.controller.js';
 import { cancelRestaurantBooking, createRestaurantBooking, getRestaurantBookings, getUserRestaurantBookings, updateRestaurantBookingStatus, updateRestaurantPaymentStatus, previewRestroBooking, getRestaurantBookingById } from '../controller/restro.booking.controller.js';
@@ -245,15 +245,13 @@ indexRouter.delete("/deleteStay/:id", AdminAuth, deleteStay);
 indexRouter.get("/getAdminStays", AdminAuth, getAdminStays);
 
 indexRouter.get("/admin/stayBookings", AdminAuth, getAdminStayBookings);
-indexRouter.get("/admin/stayBookingStatistics", AdminAuth, getStayBookingStatistics);
 indexRouter.get("/admin/getStayBookingById/:id", AdminAuth, getStayBookingById);
 indexRouter.patch("/updateStayBookingStatus/:id", AdminAuth, updateStayBookingStatus);
 indexRouter.patch("/updateStayPaymentStatus/:id", AdminAuth, updateStayPaymentStatus);
-indexRouter.patch("/admin/stay/check-in/:id", AdminAuth, stayCheckIn);
-indexRouter.patch("/admin/stay/check-out/:id", AdminAuth, stayCheckOut);
 
 indexRouter.get("/getAllStays", getAllStays);
 indexRouter.get("/getStayById/:id", getStayById);
+indexRouter.get("/searchStay", searchStay);
 indexRouter.post("/stay/preview-booking/:stayId", UserAuth, previewStayBooking);
 indexRouter.post("/createStayBooking/:stayId", UserAuth, createStayBooking);
 indexRouter.get("/my-stay-bookings", UserAuth, getUserStayBookings);

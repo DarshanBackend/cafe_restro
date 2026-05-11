@@ -8,17 +8,10 @@ import { sendBadRequest, sendError, sendNotFound, sendSuccess } from "../utils/r
 import { v4 as uuidv4 } from "uuid";
 import { sendNotification } from "../utils/notification.utils.js";
 
-
-
-
-
 const timeToMinutes = (timeStr) => {
   const [h, m] = timeStr.split(":").map(Number);
   return h * 60 + m;
 };
-
-
-
 
 const parseDate = (dateStr) => {
   const [day, month, year] = dateStr.split("-");
@@ -26,9 +19,6 @@ const parseDate = (dateStr) => {
 };
 
 const round2 = (num) => Math.round(num * 100) / 100;
-
-
-
 
 export const previewStayBooking = async (req, res) => {
   try {
@@ -42,7 +32,7 @@ export const previewStayBooking = async (req, res) => {
       return sendBadRequest(res, "date and time are required (time format: HH:MM-HH:MM)");
     }
 
-    
+
     const timeParts = time.split("-");
     if (timeParts.length < 2) {
       return sendBadRequest(res, "Invalid time format. Use HH:MM-HH:MM (e.g. 10:00-12:00)");
@@ -72,7 +62,7 @@ export const previewStayBooking = async (req, res) => {
     const taxesAndFeesAmount = round2((discountPrice * taxesAndFeesPercentage) / 100);
     const finalAmount = round2(discountPrice + taxesAndFeesAmount);
 
-    
+
     let couponDiscount = 0;
     let couponDiscountPercentage = 0;
     let appliedCouponCode = null;
@@ -174,9 +164,6 @@ export const previewStayBooking = async (req, res) => {
   }
 };
 
-
-
-
 export const createStayBooking = async (req, res) => {
   try {
     const { stayId } = req.params;
@@ -206,7 +193,7 @@ export const createStayBooking = async (req, res) => {
       return sendBadRequest(res, "date and time are required");
     }
 
-    
+
     const timeParts = time.split("-");
     if (timeParts.length < 2) {
       return sendBadRequest(res, "Invalid time format. Use HH:MM-HH:MM (e.g. 10:00-12:00)");
@@ -214,7 +201,7 @@ export const createStayBooking = async (req, res) => {
     const startTime = timeParts[0].trim();
     const endTime = timeParts[1].trim();
 
-    
+
     const bookingDate = parseDate(date);
     if (isNaN(bookingDate.getTime())) {
       return sendBadRequest(res, "Invalid date format. Use DD-MM-YYYY");
@@ -226,7 +213,7 @@ export const createStayBooking = async (req, res) => {
       return sendBadRequest(res, "Booking date cannot be in the past");
     }
 
-    
+
     const startMins = timeToMinutes(startTime);
     const endMins = timeToMinutes(endTime);
     if (endMins <= startMins) {
@@ -235,12 +222,12 @@ export const createStayBooking = async (req, res) => {
 
     const totalHours = Math.ceil((endMins - startMins) / 60) || 1;
 
-    
+
     const stay = await stayModel.findById(stayId);
     if (!stay) return sendNotFound(res, "Stay not found");
     if (!stay.isActive) return sendBadRequest(res, "Stay is not available for booking");
 
-    
+
     const existingBooking = await stayBookingModel.findOne({
       stayId,
       bookingStatus: { $in: ["pending", "upcoming", "confirmed"] },
@@ -252,7 +239,7 @@ export const createStayBooking = async (req, res) => {
       return sendBadRequest(res, "Stay is already booked for the selected time slot");
     }
 
-    
+
     const basePrice = stay.discountPrice || stay.actualPrice || stay.pricePerHour;
     const actualPrice = basePrice * totalHours;
 
@@ -264,7 +251,7 @@ export const createStayBooking = async (req, res) => {
     const taxesAndFeesAmount = round2((discountPrice * taxesAndFeesPercentage) / 100);
     const finalAmount = round2(discountPrice + taxesAndFeesAmount);
 
-    
+
     let couponDiscount = 0;
     let couponDiscountPercentage = 0;
     let appliedCouponCode = null;
@@ -288,7 +275,7 @@ export const createStayBooking = async (req, res) => {
       appliedCouponCode = coupon.couponCode;
     }
 
-    
+
     const user = await userModel.findById(userId);
     if (!user) return sendNotFound(res, "User not found");
 
@@ -301,7 +288,7 @@ export const createStayBooking = async (req, res) => {
       }
     }
 
-    
+
     const generatedBookingId = uuidv4();
 
     const isWallet = normalizedPaymentMethod === "Wallet";
@@ -347,7 +334,7 @@ export const createStayBooking = async (req, res) => {
 
     await booking.save();
 
-    
+
     if (isWallet) {
       user.walletBalance -= payableAmount;
       await user.save();
@@ -387,10 +374,6 @@ export const createStayBooking = async (req, res) => {
   }
 };
 
-
-
-
-
 export const getUserStayBookings = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -406,9 +389,6 @@ export const getUserStayBookings = async (req, res) => {
     return sendError(res, "Failed to fetch your bookings", error);
   }
 };
-
-
-
 
 export const getStayBookingById = async (req, res) => {
   try {
@@ -439,9 +419,6 @@ export const getStayBookingById = async (req, res) => {
   }
 };
 
-
-
-
 export const cancelStayBooking = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -463,19 +440,19 @@ export const cancelStayBooking = async (req, res) => {
     const isPaid = booking.payment.paymentStatus === "completed" || booking.payment.paymentStatus === "confirmed";
     const amountToRefund = booking.pricing.payableAmount || booking.pricing.finalAmount;
 
-    
+
     booking.bookingStatus = "cancelled";
 
     if (isPaid) {
       booking.payment.paymentStatus = "refunded";
 
-      
+
       const user = await userModel.findById(userId);
       if (user) {
         user.walletBalance = (user.walletBalance || 0) + amountToRefund;
         await user.save();
 
-        
+
         const wTxn = new WalletTransactionModel({
           userId,
           amount: amountToRefund,
@@ -503,9 +480,6 @@ export const cancelStayBooking = async (req, res) => {
   }
 };
 
-
-
-
 export const getAdminStayBookings = async (req, res) => {
   try {
     const adminId = req.admin?._id;
@@ -524,9 +498,6 @@ export const getAdminStayBookings = async (req, res) => {
   }
 };
 
-
-
-
 export const updateStayBookingStatus = async (req, res) => {
   try {
     const adminId = req.admin?._id;
@@ -544,7 +515,7 @@ export const updateStayBookingStatus = async (req, res) => {
       return sendError(res, 400, "Invalid booking status");
     }
 
-    
+
     const booking = await stayBookingModel.findOne({ _id: id, adminId });
     if (!booking) {
       return sendError(res, 404, "Booking not found or not authorized");
@@ -553,7 +524,7 @@ export const updateStayBookingStatus = async (req, res) => {
     const previousStatus = booking.bookingStatus.toLowerCase();
     const newStatus = finalStatus.toLowerCase();
 
-    
+
     if (newStatus === "cancelled" && previousStatus !== "cancelled") {
       const isPaid = booking.payment.paymentStatus === "completed" || booking.payment.paymentStatus === "confirmed";
 
@@ -565,7 +536,7 @@ export const updateStayBookingStatus = async (req, res) => {
           user.walletBalance = (user.walletBalance || 0) + amountToRefund;
           await user.save();
 
-          
+
           const wTxn = new WalletTransactionModel({
             userId: user._id,
             amount: amountToRefund,
@@ -580,7 +551,7 @@ export const updateStayBookingStatus = async (req, res) => {
       }
     }
 
-    
+
     booking.bookingStatus = newStatus;
     await booking.save();
 
@@ -590,9 +561,6 @@ export const updateStayBookingStatus = async (req, res) => {
     return sendError(res, 500, "Failed to update booking status", error.message);
   }
 };
-
-
-
 
 export const updateStayPaymentStatus = async (req, res) => {
   try {
@@ -621,7 +589,7 @@ export const updateStayPaymentStatus = async (req, res) => {
     const previousPaymentStatus = booking.payment.paymentStatus.toLowerCase();
     const newPaymentStatus = finalStatus.toLowerCase();
 
-    
+
     if (newPaymentStatus === "cancelled" && (previousPaymentStatus === "completed" || previousPaymentStatus === "confirmed")) {
       const amountToRefund = booking.pricing.payableAmount || booking.pricing.finalAmount;
       const user = await userModel.findById(booking.userId);
@@ -630,7 +598,7 @@ export const updateStayPaymentStatus = async (req, res) => {
         user.walletBalance = (user.walletBalance || 0) + amountToRefund;
         await user.save();
 
-        
+
         const wTxn = new WalletTransactionModel({
           userId: user._id,
           amount: amountToRefund,
@@ -649,7 +617,7 @@ export const updateStayPaymentStatus = async (req, res) => {
     } else {
       booking.payment.paymentStatus = newPaymentStatus;
 
-      
+
       if (newPaymentStatus === "completed" || newPaymentStatus === "confirmed") {
         booking.bookingStatus = "completed";
         booking.payment.paymentDate = new Date();
@@ -667,94 +635,51 @@ export const updateStayPaymentStatus = async (req, res) => {
   }
 };
 
-
-
-
-export const stayCheckIn = async (req, res) => {
+export const searchStay = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { location, date, time } = req.query;
 
-    const booking = await stayBookingModel.findById(id);
-    if (!booking) return sendNotFound(res, "Booking not found");
+    let query = { isActive: true };
 
-    if (!["confirmed", "upcoming"].includes(booking.bookingStatus.toLowerCase())) {
-      return sendBadRequest(res, "Only confirmed or upcoming bookings can be checked in");
+    if (location) {
+      query.city = { $regex: location.trim(), $options: "i" };
     }
 
-    booking.bookingStatus = "confirmed";
-    await booking.save();
+    let stays = await stayModel.find(query);
 
-    return sendSuccess(res, "Guest checked in successfully", [booking]);
-  } catch (error) {
-    return sendError(res, "Check-in failed", error);
-  }
-};
-
-
-
-
-export const stayCheckOut = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const booking = await stayBookingModel.findByIdAndUpdate(
-      id,
-      { bookingStatus: "completed" },
-      { new: true }
-    );
-
-    if (!booking) return sendNotFound(res, "Booking not found");
-
-    return sendSuccess(res, "Guest checked out successfully", [booking]);
-  } catch (error) {
-    return sendError(res, "Check-out failed", error);
-  }
-};
-
-
-
-
-export const getStayBookingStatistics = async (req, res) => {
-  try {
-    const adminId = req.admin._id;
-
-    const adminStays = await stayModel.find({ adminId }).select("_id");
-    const stayIds = adminStays.map((s) => s._id);
-
-    const stats = await stayBookingModel.aggregate([
-      { $match: { stayId: { $in: stayIds } } },
-      {
-        $group: {
-          _id: "$bookingStatus",
-          count: { $sum: 1 },
-          totalRevenue: { $sum: "$pricing.finalAmount" }
-        }
+    if (date && time) {
+      const bookingDate = parseDate(date);
+      if (isNaN(bookingDate.getTime())) {
+        return sendBadRequest(res, "Invalid date format. Use DD-MM-YYYY");
       }
-    ]);
 
-    const formattedStats = {
-      pending: 0,
-      upcoming: 0,
-      confirmed: 0,
-      completed: 0,
-      cancelled: 0,
-      refunded: 0,
-      total: 0,
-      totalRevenue: 0
-    };
-
-    stats.forEach((s) => {
-      const statusKey = s._id ? s._id.toLowerCase() : "pending";
-      if (Object.prototype.hasOwnProperty.call(formattedStats, statusKey)) {
-        formattedStats[statusKey] += s.count;
+      const timeParts = time.split("-");
+      if (timeParts.length < 2) {
+        return sendBadRequest(res, "Invalid time format. Use HH:MM-HH:MM");
       }
-      formattedStats.total += s.count;
-      formattedStats.totalRevenue += s.totalRevenue || 0;
-    });
 
-    return sendSuccess(res, "Booking statistics fetched", [formattedStats]);
+      const searchStartMins = timeToMinutes(timeParts[0].trim());
+      const searchEndMins = timeToMinutes(timeParts[1].trim());
+
+      const bookingsOnDate = await stayBookingModel.find({
+        date: bookingDate,
+        bookingStatus: { $in: ["pending", "upcoming", "confirmed"] }
+      });
+
+      const unavailableStayIds = bookingsOnDate
+        .filter(booking => {
+          const bookingStartMins = timeToMinutes(booking.startTime);
+          const bookingEndMins = timeToMinutes(booking.endTime);
+          return searchStartMins < bookingEndMins && searchEndMins > bookingStartMins;
+        })
+        .map(booking => booking.stayId.toString());
+
+      stays = stays.filter(stay => !unavailableStayIds.includes(stay._id.toString()));
+    }
+
+    return sendSuccess(res, "Search results retrieved successfully", stays);
   } catch (error) {
-    console.error("GetStayBookingStatistics error:", error);
-    return sendError(res, "Failed to fetch statistics", error);
+    log.error(`Error While Searching Stays: ${error.message}`);
+    return sendError(res, "Error While Searching Stays", error);
   }
 };
