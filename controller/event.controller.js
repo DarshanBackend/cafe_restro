@@ -5,7 +5,7 @@ import adminModel from "../model/admin.model.js";
 import log from "../utils/logger.js";
 import { sendError, sendSuccess, sendBadRequest } from "../utils/responseUtils.js";
 
-// Create a new event
+
 export const addNewEvent = async (req, res) => {
   try {
     const adminId = req.admin._id;
@@ -20,25 +20,25 @@ export const addNewEvent = async (req, res) => {
       sectionType
     } = req.body;
 
-    // Validate required fields
+    
     if (!eventName || !addresss) {
       return sendError(res, "eventName and addresss are required fields", 400);
     }
 
-    // Check if file exists
+    
     if (!req.files || !req.files.eventImage || req.files.eventImage.length === 0) {
       return sendError(res, "eventImage file is required", 400);
     }
 
     const eventImageFile = req.files.eventImage[0];
 
-    // Validate file type
+    
     const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedMimeTypes.includes(eventImageFile.mimetype)) {
       return sendError(res, "Invalid file type. Only JPEG, JPG, PNG, GIF, and WebP images are allowed", 400);
     }
 
-    // Validate file size (max 5MB)
+    
     const maxSize = 5 * 1024 * 1024;
     if (eventImageFile.size > maxSize) {
       return sendError(res, "File size too large. Maximum size is 5MB", 400);
@@ -46,7 +46,7 @@ export const addNewEvent = async (req, res) => {
 
     let eventImageUrl;
     try {
-      // Upload to S3
+      
       eventImageUrl = await uploadToS3(
         eventImageFile.buffer,
         eventImageFile.originalname,
@@ -59,11 +59,11 @@ export const addNewEvent = async (req, res) => {
       return sendError(res, "Failed to upload event image", uploadError);
     }
 
-    // Process typesOfEvent - convert string to array if needed
+    
     let eventTypesArray = [];
     if (typesOfEvent) {
       if (typeof typesOfEvent === 'string') {
-        // If it's a comma-separated string, split it
+        
         eventTypesArray = typesOfEvent.split(',').map(type => type.trim());
       } else if (Array.isArray(typesOfEvent)) {
         eventTypesArray = typesOfEvent;
@@ -85,7 +85,7 @@ export const addNewEvent = async (req, res) => {
 
     const savedEvent = await newEvent.save();
 
-    // ✅ Append event ID to admin model
+    
     if (savedEvent.adminId && savedEvent._id) {
       await adminModel.findByIdAndUpdate(
         savedEvent.adminId,
@@ -204,7 +204,7 @@ export const filterEvents = async (req, res) => {
 };
 
 
-// Get single event by ID
+
 export const getEventById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -227,13 +227,13 @@ export const getEventById = async (req, res) => {
   }
 };
 
-// Update event by ID
+
 export const updateEvent = async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
 
-    // ✅ Validate event ID
+    
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return sendError(res, "Invalid event ID", 400);
     }
@@ -241,13 +241,13 @@ export const updateEvent = async (req, res) => {
     const adminId = req.admin?._id;
     if (!adminId) return sendError(res, "Admin ID not found", 400);
 
-    // ✅ Normalize both to ObjectId
+    
     const eventObjectId = new mongoose.Types.ObjectId(id);
     const adminObjectId = new mongoose.Types.ObjectId(adminId);
 
     log.info(`Updating event: ${eventObjectId} by admin: ${adminObjectId}`);
 
-    // ✅ Check ownership and existence
+    
     const existingEvent = await eventModel.findOne({
       _id: eventObjectId,
     });
@@ -256,17 +256,17 @@ export const updateEvent = async (req, res) => {
       return sendError(res, "Event not found or unauthorized", 404);
     }
 
-    // ✅ Normalize typesOfEvent
+    
     if (updateData.typesOfEvent && typeof updateData.typesOfEvent === "string") {
       updateData.typesOfEvent = updateData.typesOfEvent.split(",").map(t => t.trim()).filter(Boolean);
     }
 
-    // ✅ Normalize ourService
+    
     if (updateData.ourService && typeof updateData.ourService === "string") {
       updateData.ourService = JSON.parse(updateData.ourService);
     }
 
-    // ✅ Handle event image upload
+    
     if (req.files && (req.files.eventImage || req.files.image)) {
       const eventImageFile = (req.files.eventImage || req.files.image)[0];
 
@@ -291,7 +291,7 @@ export const updateEvent = async (req, res) => {
         return sendError(res, "File too large. Max 5MB allowed", 400);
       }
 
-      // ✅ Delete old image
+      
       if (existingEvent.eventImage) {
         try {
           const key = existingEvent.eventImage.split(".amazonaws.com/")[1];
@@ -302,7 +302,7 @@ export const updateEvent = async (req, res) => {
         }
       }
 
-      // ✅ Upload new image
+      
       const newImageUrl = await uploadToS3(
         eventImageFile.buffer,
         eventImageFile.originalname,
@@ -313,15 +313,15 @@ export const updateEvent = async (req, res) => {
       log.info(`New event image uploaded: ${newImageUrl}`);
     }
 
-    // ✅ Clean undefined fields
+    
     Object.keys(updateData).forEach((key) => {
       if (updateData[key] === undefined) delete updateData[key];
     });
 
-    // ✅ Add updated timestamp
+    
     updateData.updatedAt = new Date();
 
-    // ✅ Update event
+    
     const updatedEvent = await eventModel.findOneAndUpdate(
       { _id: eventObjectId, adminId: adminObjectId },
       updateData,
@@ -340,7 +340,7 @@ export const updateEvent = async (req, res) => {
   }
 };
 
-// Delete event by ID
+
 export const deleteEvent = async (req, res) => {
   try {
     const { id } = req.params;
@@ -349,14 +349,14 @@ export const deleteEvent = async (req, res) => {
       return sendError(res, "Invalid event ID");
     }
 
-    // Find the event first to get S3 file URL
+    
     const event = await eventModel.findById(id);
 
     if (!event) {
       return sendError(res, "Event not found");
     }
 
-    // ✅ Remove event ID from admin model before deleting
+    
     if (event.adminId) {
       await adminModel.findByIdAndUpdate(
         event.adminId,
@@ -386,7 +386,7 @@ export const deleteEvent = async (req, res) => {
   }
 };
 
-// Bulk delete events
+
 export const bulkDeleteEvents = async (req, res) => {
   try {
     const { eventIds } = req.body;
@@ -395,7 +395,7 @@ export const bulkDeleteEvents = async (req, res) => {
       return sendError(res, "eventIds array is required", 400);
     }
 
-    // Validate all IDs
+    
     const invalidIds = eventIds.filter(id => !mongoose.Types.ObjectId.isValid(id));
     if (invalidIds.length > 0) {
       return sendError(res, `Invalid event IDs: ${invalidIds.join(", ")}`, 400);
@@ -417,7 +417,7 @@ export const bulkDeleteEvents = async (req, res) => {
   }
 };
 
-// Get events statistics
+
 export const getEventStats = async (req, res) => {
   try {
     const stats = await eventModel.aggregate([

@@ -9,14 +9,14 @@ export const getMyBookingsUnified = async (req, res) => {
         const userId = req.user?._id;
         const now = new Date();
 
-        // 1. Fetch all bookings
+        
         const [hotelBookings, cafeBookings, restroBookings] = await Promise.all([
             hotelBookingModel.find({ userId }).populate("hotelId", "name address location images").sort({ createdAt: -1 }),
             cafeBookingModel.find({ userId }).populate("cafeId", "name location images").sort({ createdAt: -1 }),
             restaurantBookingModel.find({ userId }).populate("restaurantId", "name address city images").sort({ createdAt: -1 })
         ]);
 
-        // Auto-complete past bookings in DB
+        
         const updatePastBookings = async (bookings, model) => {
             for (let booking of bookings) {
                 const status = (booking.bookingStatus || "pending").toLowerCase();
@@ -80,7 +80,7 @@ export const getMyBookingsUnified = async (req, res) => {
             restaurant: groupBookings(restroBookings, "restaurant")
         };
 
-        // Add counts
+        
         const summary = {
             hotel: hotelBookings.length,
             cafe: cafeBookings.length,

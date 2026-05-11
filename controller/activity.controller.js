@@ -27,8 +27,8 @@ const http = axios.create({
 const OVERPASS_URLS = [
   "https://overpass-api.de/api/interpreter",
   "https://lz4.overpass-api.de/api/interpreter",
-  "https://z.overpass-api.de/api/interpreter",
-  "https://overpass.kumi.systems/api/interpreter"
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.nchc.org.tw/api/interpreter"
 ];
 
 const callOverpass = async (query, timeout = 30000) => {
@@ -97,7 +97,7 @@ const fetchBingImage = async (query, width = 512, height = 512) => {
   if (cached) return cached;
 
   try {
-    const url = `https://www.bing.com/images/search?q=${encodeURIComponent(query)}&form=HDRSC2`;
+    const url = `https://www.bing.com/images/search?q=${encodeURIComponent(query)}`;
     const res = await http.get(url);
     const $ = cheerio.load(res.data);
 
@@ -246,7 +246,7 @@ const fetchOptimizedAttractions = async (cityName) => {
 
 const createEnhancedGoogleMapsUrl = (lat, lng, name = "") => {
   const encodedName = encodeURIComponent(name);
-  return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}&query_place_id=${encodedName}`;
+  return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}${name ? ` (${encodedName})` : ""}`;
 };
 
 

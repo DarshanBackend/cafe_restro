@@ -5,7 +5,7 @@ import adminModel from "../model/admin.model.js";
 import log from "../utils/logger.js";
 import { sendBadRequest, sendError, sendNotFound, sendSuccess } from "../utils/responseUtils.js";
 
-// ==================== ADMIN CONTROLLERS ==================== //
+
 
 export const createStay = async (req, res) => {
   try {
@@ -22,7 +22,7 @@ export const createStay = async (req, res) => {
     } = req.body;
     const { _id: adminId } = req.admin;
 
-    // Support both old (pricePerHour) and new (actualPrice) field names
+    
     const resolvedActualPrice = actualPrice || pricePerHour;
 
     if (!name || !address || !city || !capacity || !resolvedActualPrice) {
@@ -38,7 +38,7 @@ export const createStay = async (req, res) => {
       return sendBadRequest(res, "A stay with this name, address and city already exists");
     }
 
-    // Parse amenities (may arrive as JSON string from multipart form)
+    
     let parsedAmenities = [];
     if (amenities) {
       parsedAmenities = Array.isArray(amenities)
@@ -46,7 +46,7 @@ export const createStay = async (req, res) => {
         : (() => { try { return JSON.parse(amenities); } catch { return [amenities]; } })();
     }
 
-    // Upload images
+    
     let imageUrls = [];
     const files = req.files?.["stayImage"] || req.files?.["images"] || [];
     const fileArr = Array.isArray(files) ? files : [files];
@@ -72,7 +72,7 @@ export const createStay = async (req, res) => {
       adminId
     });
 
-    // Sync with admin document
+    
     if (newStay.adminId && newStay._id) {
       await adminModel.findByIdAndUpdate(
         newStay.adminId,
@@ -102,21 +102,21 @@ export const updateStay = async (req, res) => {
 
     const updates = { ...req.body };
 
-    // Sync pricePerHour ↔ actualPrice
+    
     if (updates.actualPrice) updates.pricePerHour = updates.actualPrice;
     if (updates.pricePerHour && !updates.actualPrice) updates.actualPrice = updates.pricePerHour;
 
-    // Parse amenities if sent as JSON string from multipart form
+    
     if (updates.amenities && !Array.isArray(updates.amenities)) {
       try { updates.amenities = JSON.parse(updates.amenities); } catch { updates.amenities = [updates.amenities]; }
     }
 
-    // Handle image replacement
+    
     const files = req.files?.["stayImage"] || req.files?.["images"] || [];
     const fileArr = Array.isArray(files) ? files : [files];
 
     if (fileArr.length > 0 && fileArr[0]?.buffer) {
-      // Delete old images
+      
       if (Array.isArray(stay.images) && stay.images.length > 0) {
         for (const oldUrl of stay.images) {
           const key = oldUrl.split(".amazonaws.com/")[1];
@@ -155,14 +155,14 @@ export const deleteStay = async (req, res) => {
     const stay = await stayModel.findById(id);
     if (!stay) return sendNotFound(res, "Stay not found");
 
-    // Remove from admin document
+    
     await adminModel.findByIdAndUpdate(
       stay.adminId,
       { $pull: { stays: id } },
       { new: true }
     ).catch((err) => log.warn("Failed to remove stay from admin:", err.message));
 
-    // Delete S3 images
+    
     if (Array.isArray(stay.images) && stay.images.length > 0) {
       for (const imageUrl of stay.images) {
         const key = imageUrl.split(".amazonaws.com/")[1];
@@ -191,7 +191,7 @@ export const getAdminStays = async (req, res) => {
 };
 
 
-// ==================== USER CONTROLLERS ==================== //
+
 
 export const getAllStays = async (req, res) => {
   try {

@@ -11,7 +11,7 @@ export const getMyPaymentsAndRefunds = async (req, res) => {
     const { _id: userId } = req.user;
     const now = new Date();
 
-    // 1. Fetch all bookings from all models
+    
     const [hotelBookings, cafeBookings, restroBookings, stayBookings, hallBookings] = await Promise.all([
       hotelBookingModel.find({ userId }).populate("hotelId", "name address city").sort({ createdAt: -1 }),
       cafeBookingModel.find({ userId }).populate("cafeId", "name location").sort({ createdAt: -1 }),
@@ -51,19 +51,19 @@ export const getMyPaymentsAndRefunds = async (req, res) => {
 
       const isCompleted = paymentStatus === "refunded";
       
-      // Calculate realistic timeline dates based on cancellation time
+      
       const cancelDate = new Date(booking.updatedAt || booking.createdAt);
       
       const reviewDate = new Date(cancelDate);
-      reviewDate.setHours(reviewDate.getHours() + 12); // Review after 12 hours
+      reviewDate.setHours(reviewDate.getHours() + 12); 
       
       const checkProcessDate = new Date(cancelDate);
-      checkProcessDate.setDate(checkProcessDate.getDate() + 7); // Processed after 7 days
+      checkProcessDate.setDate(checkProcessDate.getDate() + 7); 
       
       const refundCompletedDate = new Date(cancelDate);
-      refundCompletedDate.setDate(refundCompletedDate.getDate() + 12); // Full refund after 12 days
+      refundCompletedDate.setDate(refundCompletedDate.getDate() + 12); 
 
-      // Format date helper (e.g. "14, Aug 25 09:42 PM")
+      
       const formatDate = (dateObj) => {
         return dateObj.toLocaleDateString('en-GB', { 
           day: '2-digit', month: 'short', year: '2-digit' 

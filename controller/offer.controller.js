@@ -78,7 +78,7 @@ export const updateOffer = async (req, res) => {
         "offers"
       );
 
-      // Delete old image from S3 if a new one is uploaded
+      
       if (existingOffer.backgroundImage) {
         try {
           const key = existingOffer.backgroundImage.split(".amazonaws.com/")[1];
@@ -109,7 +109,7 @@ export const deleteOffer = async (req, res) => {
     const deleted = await offerModel.findByIdAndDelete(id);
     if (!deleted) return sendError(res, "Offer not found");
 
-    // Delete associated image from S3
+    
     if (deleted.backgroundImage) {
       try {
         const key = deleted.backgroundImage.split(".amazonaws.com/")[1];

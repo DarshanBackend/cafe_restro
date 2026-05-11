@@ -8,7 +8,7 @@ import transporter from "../utils/Email.config.js";
 import { uploadToS3, deleteFromS3 } from "../middleware/uploadS3.js";
 
 export const sendOtpEmail = async (email, name, otp) => {
-  // Let errors propagate so callers can handle failures appropriately
+  
   const info = await transporter.sendMail({
     from: `"Cafe & Restro" <${process.env.EMAIL_USER}>`,
     to: email,
@@ -70,9 +70,9 @@ export const newUserRegister = async (req, res) => {
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
-    const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
+    const avatar = `https://ui-avatars.com/api/?name=${name}&background=random`;
 
-    // Generate a unique referral code
+    
     const generatedReferralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
     let referredByUserId = null;
@@ -103,12 +103,12 @@ export const newUserRegister = async (req, res) => {
 
     await newUser.save();
 
-    // Reward logic for referral
+    
     if (referredByUserId) {
       const SIGNUP_BONUS = 20;
       const REFERRER_BONUS = 20;
 
-      // Reward New User
+      
       newUser.walletBalance = (newUser.walletBalance || 0) + SIGNUP_BONUS;
       await newUser.save();
       const newUserTxn = new WalletTransactionModel({
@@ -120,7 +120,7 @@ export const newUserRegister = async (req, res) => {
       });
       await newUserTxn.save();
 
-      // Reward Referrer
+      
       const referrerUser = await userModel.findById(referredByUserId);
       if (referrerUser) {
         referrerUser.walletBalance = (referrerUser.walletBalance || 0) + REFERRER_BONUS;
@@ -192,7 +192,7 @@ export const updateUser = async (req, res) => {
     const { id } = req.params;
     const updates = req.body;
 
-    // Prevent updating sensitive fields directly
+    
     delete updates.password;
     delete updates.email;
     delete updates.otp;
@@ -205,7 +205,7 @@ export const updateUser = async (req, res) => {
     if (!user) return sendNotFound(res, "User not found");
 
     if (req.file) {
-      // Upload new avatar to S3
+      
       updates.avatar = await uploadToS3(
         req.file.buffer,
         req.file.originalname,
@@ -213,7 +213,7 @@ export const updateUser = async (req, res) => {
         "users"
       );
 
-      // Delete old avatar from S3 if it exists and is an S3 url
+      
       if (user.avatar && user.avatar.includes(".amazonaws.com/")) {
         try {
           const key = user.avatar.split(".amazonaws.com/")[1];
@@ -369,7 +369,7 @@ export const googleLogin = async (req, res) => {
     let isNew = false;
 
     if (user) {
-      // Update uid or avatar if they are missing
+      
       if (uid && !user.uid) user.uid = uid;
       if (avatar && !user.avatar) user.avatar = avatar;
 
@@ -407,7 +407,7 @@ export const googleLogin = async (req, res) => {
         name,
         email,
         uid: uid || null,
-        avatar: avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
+        avatar: avatar || `https://ui-avatars.com/api/?name=${name}&background=random`,
         password: "SOCIAL_LOGIN",
         referralCode: generatedReferralCode,
         referredBy: referredByUserId,
@@ -424,12 +424,12 @@ export const googleLogin = async (req, res) => {
 
       await user.save();
 
-      // Reward logic for referral
+      
       if (referredByUserId) {
         const SIGNUP_BONUS = 20;
         const REFERRER_BONUS = 20;
 
-        // Reward New User
+        
         user.walletBalance = (user.walletBalance || 0) + SIGNUP_BONUS;
         await user.save();
         const newUserTxn = new WalletTransactionModel({
@@ -441,7 +441,7 @@ export const googleLogin = async (req, res) => {
         });
         await newUserTxn.save();
 
-        // Reward Referrer
+        
         const referrerUser = await userModel.findById(referredByUserId);
         if (referrerUser) {
           referrerUser.walletBalance = (referrerUser.walletBalance || 0) + REFERRER_BONUS;
@@ -634,28 +634,28 @@ export const changeUserPassword = async (req, res) => {
     const { oldPassword, newPassword } = req.body;
     const { _id } = req.user;
 
-    // Validate input
+    
     if (!oldPassword || !newPassword) {
       return sendBadRequest(res, "Both oldPassword and newPassword are required.");
     }
 
-    // Find user
+    
     const user = await userModel.findById(_id);
     if (!user) {
       return sendNotFound(res, "User not found.");
     }
 
-    // Compare old password
+    
     const isMatch = await bcrypt.compare(oldPassword, user.password);
     if (!isMatch) {
       return sendBadRequest(res, "Old password is incorrect.");
     }
 
-    // Hash new password
+    
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-    // Update password and save
+    
     user.password = hashedPassword;
     await user.save();
 
@@ -687,7 +687,7 @@ export const userLogout = async (req, res) => {
   }
 };
 
-//profile section controller
+
 export const getUserProfile = async (req, res) => {
   try {
     const { _id } = req?.user;
@@ -696,7 +696,7 @@ export const getUserProfile = async (req, res) => {
       return sendBadRequest(res, "User not authenticated");
     }
 
-    // Fetch user data
+    
     const user = await userModel.findById(_id).select("-password");
 
     if (!user) {

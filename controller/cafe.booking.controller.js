@@ -97,16 +97,24 @@ export const createCafeBooking = async (req, res) => {
     let couponDetails = null;
     let amountAfterCoupon = discountPrice;
     if (couponCode) {
-      const coupon = await coupanModel.findOne({ couponCode: couponCode.toUpperCase(), isActive: true });
-      if (coupon && (!coupon.couponExpire || new Date(coupon.couponExpire) >= new Date())) {
-        const couponDiscountAmount = (discountPrice * (coupon.couponPerc || 0)) / 100;
-        amountAfterCoupon = discountPrice - couponDiscountAmount;
-        couponDetails = {
-          code: coupon.couponCode,
-          discountPercent: coupon.couponPerc,
-          discountAmount: couponDiscountAmount,
-        };
+      const coupon = await coupanModel.findOne({ couponCode: couponCode.toUpperCase() });
+      if (!coupon) {
+        return res.status(400).json({ success: false, message: "Invalid coupon code" });
       }
+      if (!coupon.isActive) {
+        return res.status(400).json({ success: false, message: "This coupon is no longer active" });
+      }
+      if (coupon.couponExpire && new Date(coupon.couponExpire) < new Date()) {
+        return res.status(400).json({ success: false, message: "This coupon has expired" });
+      }
+
+      const couponDiscountAmount = (discountPrice * (coupon.couponPerc || 0)) / 100;
+      amountAfterCoupon = discountPrice - couponDiscountAmount;
+      couponDetails = {
+        code: coupon.couponCode,
+        discountPercent: coupon.couponPerc,
+        discountAmount: couponDiscountAmount,
+      };
     }
 
     const taxesAndFeesPercentage = 23;
@@ -255,8 +263,8 @@ export const createCafeBooking = async (req, res) => {
           },
         ],
         mode: "payment",
-        success_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/cafe/success?session_id={CHECKOUT_SESSION_ID}&booking_id=${savedBooking._id}`,
-        cancel_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/cafe/cancel?booking_id=${savedBooking._id}`,
+        success_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/success`,
+        cancel_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/cancel`,
         metadata: {
           bookingId: savedBooking._id.toString(),
           cafeId: cafeId.toString(),
@@ -485,19 +493,27 @@ export const previewCafeBooking = async (req, res) => {
     let couponDetails = null;
     let amountAfterCoupon = discountPrice;
     if (couponCode) {
-      const coupon = await coupanModel.findOne({ couponCode: couponCode.toUpperCase(), isActive: true });
-      if (coupon && (!coupon.couponExpire || new Date(coupon.couponExpire) >= new Date())) {
-        const couponDiscountPercent = coupon.couponPerc || 0;
-        const couponDiscountAmount = (discountPrice * couponDiscountPercent) / 100;
-        amountAfterCoupon = discountPrice - couponDiscountAmount;
-
-        couponDetails = {
-          code: coupon.couponCode,
-          discountPercent: couponDiscountPercent,
-          discountAmount: couponDiscountAmount,
-          description: `Additional ${couponDiscountPercent}% Coupon Discount Applied`,
-        };
+      const coupon = await coupanModel.findOne({ couponCode: couponCode.toUpperCase() });
+      if (!coupon) {
+        return res.status(400).json({ success: false, message: "Invalid coupon code" });
       }
+      if (!coupon.isActive) {
+        return res.status(400).json({ success: false, message: "This coupon is no longer active" });
+      }
+      if (coupon.couponExpire && new Date(coupon.couponExpire) < new Date()) {
+        return res.status(400).json({ success: false, message: "This coupon has expired" });
+      }
+
+      const couponDiscountPercent = coupon.couponPerc || 0;
+      const couponDiscountAmount = (discountPrice * couponDiscountPercent) / 100;
+      amountAfterCoupon = discountPrice - couponDiscountAmount;
+
+      couponDetails = {
+        code: coupon.couponCode,
+        discountPercent: couponDiscountPercent,
+        discountAmount: couponDiscountAmount,
+        description: `Additional ${couponDiscountPercent}% Coupon Discount Applied`,
+      };
     }
 
     const taxesAndFeesPercentage = 23;

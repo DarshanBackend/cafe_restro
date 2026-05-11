@@ -9,17 +9,17 @@ import { v4 as uuidv4 } from "uuid";
 import { sendNotification } from "../utils/notification.utils.js";
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPER: parse "HH:MM" → minutes since midnight
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
 const timeToMinutes = (timeStr) => {
   const [h, m] = timeStr.split(":").map(Number);
   return h * 60 + m;
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPER: parse "DD-MM-YYYY" → Date
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
 const parseDate = (dateStr) => {
   const [day, month, year] = dateStr.split("-");
   return new Date(`${year}-${month}-${day}`);
@@ -27,9 +27,9 @@ const parseDate = (dateStr) => {
 
 const round2 = (num) => Math.round(num * 100) / 100;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// USER: Preview billing (no booking created)
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
 export const previewStayBooking = async (req, res) => {
   try {
     const { stayId } = req.params;
@@ -42,7 +42,7 @@ export const previewStayBooking = async (req, res) => {
       return sendBadRequest(res, "date and time are required (time format: HH:MM-HH:MM)");
     }
 
-    // Parse time as "HH:MM-HH:MM"
+    
     const timeParts = time.split("-");
     if (timeParts.length < 2) {
       return sendBadRequest(res, "Invalid time format. Use HH:MM-HH:MM (e.g. 10:00-12:00)");
@@ -72,17 +72,24 @@ export const previewStayBooking = async (req, res) => {
     const taxesAndFeesAmount = round2((discountPrice * taxesAndFeesPercentage) / 100);
     const finalAmount = round2(discountPrice + taxesAndFeesAmount);
 
-    // ── Apply coupon if provided ──────────────────────────────────────────
+    
     let couponDiscount = 0;
     let couponDiscountPercentage = 0;
     let appliedCouponCode = null;
     let amountAfterCoupon = finalAmount;
 
     if (couponCode) {
-      const coupon = await coupanModel.validateCoupon(couponCode);
+      const coupon = await coupanModel.findOne({ couponCode: couponCode.toUpperCase() });
       if (!coupon) {
-        return sendBadRequest(res, "Invalid or expired coupon code");
+        return sendBadRequest(res, "Invalid coupon code");
       }
+      if (!coupon.isActive) {
+        return sendBadRequest(res, "This coupon is no longer active");
+      }
+      if (coupon.couponExpire && new Date(coupon.couponExpire) < new Date()) {
+        return sendBadRequest(res, "This coupon has expired");
+      }
+
       couponDiscountPercentage = coupon.couponPerc;
       couponDiscount = round2((finalAmount * couponDiscountPercentage) / 100);
       amountAfterCoupon = round2(finalAmount - couponDiscount);
@@ -127,9 +134,9 @@ export const previewStayBooking = async (req, res) => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// USER: Create Hourly Stay Booking
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
 export const createStayBooking = async (req, res) => {
   try {
     const { stayId } = req.params;
@@ -159,7 +166,7 @@ export const createStayBooking = async (req, res) => {
       return sendBadRequest(res, "date and time are required");
     }
 
-    // ── Parse time "HH:MM-HH:MM" ──────────────────────────────────────────
+    
     const timeParts = time.split("-");
     if (timeParts.length < 2) {
       return sendBadRequest(res, "Invalid time format. Use HH:MM-HH:MM (e.g. 10:00-12:00)");
@@ -167,7 +174,7 @@ export const createStayBooking = async (req, res) => {
     const startTime = timeParts[0].trim();
     const endTime = timeParts[1].trim();
 
-    // ── Parse & validate date ──────────────────────────────────────────────
+    
     const bookingDate = parseDate(date);
     if (isNaN(bookingDate.getTime())) {
       return sendBadRequest(res, "Invalid date format. Use DD-MM-YYYY");
@@ -179,7 +186,7 @@ export const createStayBooking = async (req, res) => {
       return sendBadRequest(res, "Booking date cannot be in the past");
     }
 
-    // ── Parse & validate times ─────────────────────────────────────────────
+    
     const startMins = timeToMinutes(startTime);
     const endMins = timeToMinutes(endTime);
     if (endMins <= startMins) {
@@ -188,12 +195,12 @@ export const createStayBooking = async (req, res) => {
 
     const totalHours = Math.ceil((endMins - startMins) / 60) || 1;
 
-    // ── Fetch stay ─────────────────────────────────────────────────────────
+    
     const stay = await stayModel.findById(stayId);
     if (!stay) return sendNotFound(res, "Stay not found");
     if (!stay.isActive) return sendBadRequest(res, "Stay is not available for booking");
 
-    // ── Conflict check ─────────────────────────────────────────────────────
+    
     const existingBooking = await stayBookingModel.findOne({
       stayId,
       bookingStatus: { $in: ["pending", "upcoming", "confirmed"] },
@@ -205,7 +212,7 @@ export const createStayBooking = async (req, res) => {
       return sendBadRequest(res, "Stay is already booked for the selected time slot");
     }
 
-    // ── Pricing ────────────────────────────────────────────────────────────
+    
     const basePrice = stay.discountPrice || stay.actualPrice || stay.pricePerHour;
     const actualPrice = basePrice * totalHours;
 
@@ -217,24 +224,31 @@ export const createStayBooking = async (req, res) => {
     const taxesAndFeesAmount = round2((discountPrice * taxesAndFeesPercentage) / 100);
     const finalAmount = round2(discountPrice + taxesAndFeesAmount);
 
-    // ── Apply coupon ───────────────────────────────────────────────────────
+    
     let couponDiscount = 0;
     let couponDiscountPercentage = 0;
     let appliedCouponCode = null;
     let payableAmount = finalAmount;
 
     if (couponCode) {
-      const coupon = await coupanModel.validateCoupon(couponCode);
+      const coupon = await coupanModel.findOne({ couponCode: couponCode.toUpperCase() });
       if (!coupon) {
-        return sendBadRequest(res, "Invalid or expired coupon code");
+        return sendBadRequest(res, "Invalid coupon code");
       }
+      if (!coupon.isActive) {
+        return sendBadRequest(res, "This coupon is no longer active");
+      }
+      if (coupon.couponExpire && new Date(coupon.couponExpire) < new Date()) {
+        return sendBadRequest(res, "This coupon has expired");
+      }
+
       couponDiscountPercentage = coupon.couponPerc;
       couponDiscount = round2((finalAmount * couponDiscountPercentage) / 100);
       payableAmount = round2(finalAmount - couponDiscount);
       appliedCouponCode = coupon.couponCode;
     }
 
-    // ── Fetch user & wallet check ──────────────────────────────────────────
+    
     const user = await userModel.findById(userId);
     if (!user) return sendNotFound(res, "User not found");
 
@@ -247,7 +261,7 @@ export const createStayBooking = async (req, res) => {
       }
     }
 
-    // ── Create booking ─────────────────────────────────────────────────────
+    
     const generatedBookingId = uuidv4();
 
     const isWallet = normalizedPaymentMethod === "Wallet";
@@ -293,7 +307,7 @@ export const createStayBooking = async (req, res) => {
 
     await booking.save();
 
-    // ── Wallet deduction ───────────────────────────────────────────────────
+    
     if (isWallet) {
       user.walletBalance -= payableAmount;
       await user.save();
@@ -334,9 +348,9 @@ export const createStayBooking = async (req, res) => {
 };
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// USER: Get My Stay Bookings
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
 export const getUserStayBookings = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -353,9 +367,9 @@ export const getUserStayBookings = async (req, res) => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// USER: Get Single Booking By ID
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
 export const getStayBookingById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -385,9 +399,9 @@ export const getStayBookingById = async (req, res) => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// USER: Cancel Stay Booking
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
 export const cancelStayBooking = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -409,19 +423,19 @@ export const cancelStayBooking = async (req, res) => {
     const isPaid = booking.payment.paymentStatus === "completed" || booking.payment.paymentStatus === "confirmed";
     const amountToRefund = booking.pricing.payableAmount || booking.pricing.finalAmount;
 
-    // Update booking status
+    
     booking.bookingStatus = "cancelled";
 
     if (isPaid) {
       booking.payment.paymentStatus = "refunded";
 
-      // Credit amount back to user's wallet
+      
       const user = await userModel.findById(userId);
       if (user) {
         user.walletBalance = (user.walletBalance || 0) + amountToRefund;
         await user.save();
 
-        // Record wallet transaction
+        
         const wTxn = new WalletTransactionModel({
           userId,
           amount: amountToRefund,
@@ -449,9 +463,9 @@ export const cancelStayBooking = async (req, res) => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ADMIN: Get All Stay Bookings
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
 export const getAdminStayBookings = async (req, res) => {
   try {
     const adminId = req.admin?._id;
@@ -470,9 +484,9 @@ export const getAdminStayBookings = async (req, res) => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ADMIN: Update Booking Status
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
 export const updateStayBookingStatus = async (req, res) => {
   try {
     const adminId = req.admin?._id;
@@ -490,7 +504,7 @@ export const updateStayBookingStatus = async (req, res) => {
       return sendError(res, 400, "Invalid booking status");
     }
 
-    // Find booking
+    
     const booking = await stayBookingModel.findOne({ _id: id, adminId });
     if (!booking) {
       return sendError(res, 404, "Booking not found or not authorized");
@@ -499,7 +513,7 @@ export const updateStayBookingStatus = async (req, res) => {
     const previousStatus = booking.bookingStatus.toLowerCase();
     const newStatus = finalStatus.toLowerCase();
 
-    // If changing to cancelled and it was confirmed/paid, process refund
+    
     if (newStatus === "cancelled" && previousStatus !== "cancelled") {
       const isPaid = booking.payment.paymentStatus === "completed" || booking.payment.paymentStatus === "confirmed";
 
@@ -511,7 +525,7 @@ export const updateStayBookingStatus = async (req, res) => {
           user.walletBalance = (user.walletBalance || 0) + amountToRefund;
           await user.save();
 
-          // Record wallet transaction
+          
           const wTxn = new WalletTransactionModel({
             userId: user._id,
             amount: amountToRefund,
@@ -526,7 +540,7 @@ export const updateStayBookingStatus = async (req, res) => {
       }
     }
 
-    // Update and save
+    
     booking.bookingStatus = newStatus;
     await booking.save();
 
@@ -537,9 +551,9 @@ export const updateStayBookingStatus = async (req, res) => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ADMIN: Update Payment Status
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
 export const updateStayPaymentStatus = async (req, res) => {
   try {
     const adminId = req.admin?._id;
@@ -567,7 +581,7 @@ export const updateStayPaymentStatus = async (req, res) => {
     const previousPaymentStatus = booking.payment.paymentStatus.toLowerCase();
     const newPaymentStatus = finalStatus.toLowerCase();
 
-    // If changing to cancelled and it was previously paid, process refund
+    
     if (newPaymentStatus === "cancelled" && (previousPaymentStatus === "completed" || previousPaymentStatus === "confirmed")) {
       const amountToRefund = booking.pricing.payableAmount || booking.pricing.finalAmount;
       const user = await userModel.findById(booking.userId);
@@ -576,7 +590,7 @@ export const updateStayPaymentStatus = async (req, res) => {
         user.walletBalance = (user.walletBalance || 0) + amountToRefund;
         await user.save();
 
-        // Record wallet transaction
+        
         const wTxn = new WalletTransactionModel({
           userId: user._id,
           amount: amountToRefund,
@@ -595,7 +609,7 @@ export const updateStayPaymentStatus = async (req, res) => {
     } else {
       booking.payment.paymentStatus = newPaymentStatus;
 
-      // If payment is completed or confirmed, also mark the booking as confirmed
+      
       if (newPaymentStatus === "completed" || newPaymentStatus === "confirmed") {
         booking.bookingStatus = "completed";
         booking.payment.paymentDate = new Date();
@@ -613,9 +627,9 @@ export const updateStayPaymentStatus = async (req, res) => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ADMIN: Check-in Guest
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
 export const stayCheckIn = async (req, res) => {
   try {
     const { id } = req.params;
@@ -636,9 +650,9 @@ export const stayCheckIn = async (req, res) => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ADMIN: Check-out Guest
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
 export const stayCheckOut = async (req, res) => {
   try {
     const { id } = req.params;
@@ -657,9 +671,9 @@ export const stayCheckOut = async (req, res) => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ADMIN: Booking Statistics
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
 export const getStayBookingStatistics = async (req, res) => {
   try {
     const adminId = req.admin._id;

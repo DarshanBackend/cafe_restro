@@ -67,7 +67,7 @@ export const getMyWatchlist = async (req, res) => {
         location: ""
       };
 
-      // Handle specific fields based on type
+      
       if (type === "hotel") {
         formatted.location = item.address?.city || "";
         formatted.price = item.discountPrice || item.actualPrice || 0;
@@ -101,7 +101,7 @@ export const getMyWatchlist = async (req, res) => {
       event: (watchlist.event || []).map(e => formatItem(e, "event")).filter(Boolean)
     };
 
-    // Summary counts
+    
     const summary = {
       hotel: result.hotel.length,
       cafe: result.cafe.length,
@@ -136,7 +136,7 @@ export const removeWatchlistItem = async (req, res) => {
       });
     }
 
-    // Build the pull object dynamically
+    
     const update = { $pull: {} };
     
     if (hotel) update.$pull.hotels = hotel;
@@ -145,7 +145,7 @@ export const removeWatchlistItem = async (req, res) => {
     if (hall) update.$pull.hall = hall;
     if (event) update.$pull.event = event;
 
-    // Update the user's watchlist
+    
     const watchlist = await watchListModel.findOneAndUpdate(
       { userId },
       update,

@@ -5,6 +5,7 @@ import { sendBadRequest, sendNotFound, sendSuccess, sendError } from "../utils/r
 import userModel from "../model/user.model.js";
 import WalletTransactionModel from "../model/wallet.transaction.model.js";
 import { v4 as uuidv4 } from "uuid";
+import coupanModel from "../model/coupan.model.js";
 
 export const createHallBooking = async (req, res) => {
   try {
@@ -17,7 +18,8 @@ export const createHallBooking = async (req, res) => {
       peoples,
       paymentMethod = "Stripe",
       transactionId = "",
-      paymentStatus = "pending"
+      paymentStatus = "pending",
+      couponCode
     } = req.body;
 
     const normalizedPaymentMethod = paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1).toLowerCase();
@@ -84,9 +86,38 @@ export const createHallBooking = async (req, res) => {
     const discountAmount = (actualPriceTotal * discountPercentage) / 100;
     const amountAfterDiscount = actualPriceTotal - discountAmount;
 
+    let couponDetails = null;
+    let amountAfterCoupon = amountAfterDiscount;
+
+    if (couponCode) {
+      const coupon = await coupanModel.findOne({ couponCode: couponCode.toUpperCase() });
+      
+      if (!coupon) {
+        return sendBadRequest(res, "Invalid coupon code");
+      }
+      
+      if (!coupon.isActive) {
+        return sendBadRequest(res, "This coupon is no longer active");
+      }
+      
+      if (coupon.couponExpire && new Date(coupon.couponExpire) < new Date()) {
+        return sendBadRequest(res, "This coupon has expired");
+      }
+
+      const couponDiscountPercent = coupon.couponPerc || 0;
+      const couponDiscountAmount = (amountAfterDiscount * couponDiscountPercent) / 100;
+      amountAfterCoupon = amountAfterDiscount - couponDiscountAmount;
+
+      couponDetails = {
+        code: coupon.couponCode,
+        discountPercent: couponDiscountPercent,
+        discountAmount: couponDiscountAmount,
+      };
+    }
+
     const taxesAndFeesPercentage = 23;
-    const taxesAndFeesAmount = (amountAfterDiscount * taxesAndFeesPercentage) / 100;
-    const finalAmount = amountAfterDiscount + taxesAndFeesAmount;
+    const taxesAndFeesAmount = (amountAfterCoupon * taxesAndFeesPercentage) / 100;
+    const finalAmount = amountAfterCoupon + taxesAndFeesAmount;
 
     const round = (num) => Math.round(num * 100) / 100;
 
@@ -120,10 +151,13 @@ export const createHallBooking = async (req, res) => {
         discountPercentage,
         discountAmount,
         discountPrice: amountAfterDiscount,
+        couponDiscountAmount: couponDetails ? couponDetails.discountAmount : 0,
+        priceAfterCoupon: amountAfterCoupon,
         taxesAndFeesPercentage,
         taxesAndFeesAmount,
         finalAmount: round(finalAmount),
-        currency: "INR"
+        currency: "INR",
+        couponCode: couponDetails ? couponDetails.code : null,
       },
       bookingId: generatedBookingId,
       bookingStatus: (normalizedPaymentMethod === "Wallet" || paymentStatus === "completed" || paymentStatus === "confirmed") ? 'Upcoming' : 'pending',

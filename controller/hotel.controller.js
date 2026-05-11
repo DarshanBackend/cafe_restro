@@ -123,7 +123,7 @@ export const deleteHotels = async (req, res) => {
 
     const imagesToDelete = [];
 
-    // Delete hotel main images
+    
     if (Array.isArray(hotel.images) && hotel.images.length > 0) {
       hotel.images.forEach((imgUrl) => {
         const key = imgUrl.split(".amazonaws.com/")[1];
@@ -131,7 +131,7 @@ export const deleteHotels = async (req, res) => {
       });
     }
 
-    // Delete room images
+    
     if (Array.isArray(hotel.rooms) && hotel.rooms.length > 0) {
       hotel.rooms.forEach((room) => {
         if (Array.isArray(room.images) && room.images.length > 0) {
@@ -167,7 +167,7 @@ export const deleteHotels = async (req, res) => {
   }
 }
 
-// GET /api/hotels/getHotelByCityName/:name
+
 export const getHotelByCityName = async (req, res) => {
   try {
     const { name } = req.params;
@@ -188,15 +188,15 @@ export const getHotelByCityName = async (req, res) => {
       });
     }
 
-    // Build filter object
+    
     const filter = {
       "address.city": {
         $regex: name,
-        $options: 'i' // case insensitive
+        $options: 'i' 
       }
     };
 
-    // Add price range filter if provided
+    
     if (minPrice || maxPrice) {
       filter.$or = [];
 
@@ -215,13 +215,13 @@ export const getHotelByCityName = async (req, res) => {
       }
     }
 
-    // Add amenities filter if provided
+    
     if (amenities) {
       const amenitiesArray = Array.isArray(amenities) ? amenities : amenities.split(',');
       filter.amenities = { $in: amenitiesArray.map(a => a.trim()) };
     }
 
-    // Build sort object
+    
     const sortOptions = {};
     switch (sortBy) {
       case 'price':
@@ -235,12 +235,12 @@ export const getHotelByCityName = async (req, res) => {
         sortOptions.name = sortOrder === 'desc' ? -1 : 1;
     }
 
-    // Calculate pagination
+    
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    // Execute query with pagination
+    
     const hotels = await hotelModel
       .find(filter)
       .select('name description address images rooms amenities priceRange Rent ourService averageRating reviews')
@@ -251,11 +251,11 @@ export const getHotelByCityName = async (req, res) => {
       .limit(limitNum)
       .lean();
 
-    // Get total count for pagination
+    
     const totalHotels = await hotelModel.countDocuments(filter);
     const totalPages = Math.ceil(totalHotels / limitNum);
 
-    // Transform response data
+    
     const transformedHotels = hotels.map(hotel => ({
       _id: hotel._id,
       name: hotel.name,
@@ -317,7 +317,7 @@ export const getHotelByCityName = async (req, res) => {
   }
 };
 
-// Optional: Get unique cities for search suggestions
+
 export const getCitySuggestions = async (req, res) => {
   try {
     const { query } = req.query;
@@ -495,7 +495,7 @@ export const updateHotel = async (req, res) => {
     const hotel = await hotelModel.findById(hotelId);
     if (!hotel) return sendError(res, "Hotel not found", "Hotel ID is invalid");
 
-    // Handle JSON parsing for form-data strings
+    
     if (updateData.address && typeof updateData.address === "string") {
       updateData.address = JSON.parse(updateData.address);
     }
@@ -509,11 +509,11 @@ export const updateHotel = async (req, res) => {
       updateData.ourService = JSON.parse(updateData.ourService);
     }
 
-    // Convert numbers
+    
     if (updateData.actualPrice) updateData.actualPrice = Number(updateData.actualPrice);
     if (updateData.discountPrice) updateData.discountPrice = Number(updateData.discountPrice);
 
-    // Handle new image uploads
+    
     if (req.files?.hotelImages) {
       updateData.images = [...(hotel.images || []), ...req.files.hotelImages];
     }

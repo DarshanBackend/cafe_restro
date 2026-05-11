@@ -57,7 +57,7 @@ export const getMyNotifications = async (req, res) => {
             .limit(parseInt(limit))
             .lean();
 
-        // Process notifications and calculate isRead
+        
         const processedNotifications = notifications.map(notification => {
             const read = notification.isForAllUsers
                 ? notification.readBy.some(id => id.toString() === userId.toString())
@@ -70,14 +70,14 @@ export const getMyNotifications = async (req, res) => {
             };
         });
 
-        // Optional filter by isRead in memory (if needed, but filter above is better if possible)
+        
         let filtered = processedNotifications;
         if (isRead !== undefined) {
             const isReadBool = isRead === 'true';
             filtered = processedNotifications.filter(n => n.isRead === isReadBool);
         }
 
-        // Grouping logic
+        
         const now = new Date();
         const todayStart = new Date(now.setHours(0, 0, 0, 0));
         const yesterdayStart = new Date(new Date(todayStart).setDate(todayStart.getDate() - 1));

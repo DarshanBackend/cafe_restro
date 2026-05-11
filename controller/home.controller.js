@@ -79,16 +79,16 @@ export const WhatsNew = async (req, res) => {
     });
   }
 }
-// =================================================================================================================
-// GET /api/home/trending-destinations
+
+
 export const getTrendingDestinations = async (req, res) => {
   try {
     const { limit = 8 } = req.query;
 
-    // Get trending INDIAN cities based on actual bookings
+    
     const trendingCities = await getIndianTrendingCities(parseInt(limit));
 
-    // Enhance with images from Unsplash
+    
     const destinationsWithImages = await Promise.all(
       trendingCities.map(async (city) => ({
         ...city,
@@ -111,10 +111,10 @@ export const getTrendingDestinations = async (req, res) => {
   }
 };
 
-// Core function: Analyze bookings to find trending INDIAN cities
+
 const getIndianTrendingCities = async (limit = 8) => {
   try {
-    // Get popular Indian cities from bookings
+    
     const trendingByBookings = await hotelBookingModel.aggregate([
       {
         $match: {
@@ -123,7 +123,7 @@ const getIndianTrendingCities = async (limit = 8) => {
       },
       {
         $lookup: {
-          from: "hotels", // Make sure this matches your MongoDB collection name
+          from: "hotels", 
           localField: "hotelId",
           foreignField: "_id",
           as: "hotel"
@@ -135,11 +135,11 @@ const getIndianTrendingCities = async (limit = 8) => {
       {
         $match: {
           "hotel.address.city": { $exists: true, $ne: "" },
-          // Filter for Indian cities only
+          
           $or: [
             { "hotel.address.country": "India" },
-            { "hotel.address.country": { $exists: false } }, // Include if country not specified
-            { "hotel.address.country": "" } // Include if empty
+            { "hotel.address.country": { $exists: false } }, 
+            { "hotel.address.country": "" } 
           ]
         }
       },
@@ -164,11 +164,11 @@ const getIndianTrendingCities = async (limit = 8) => {
         }
       },
       {
-        $limit: limit * 2 // Get extra to filter duplicates
+        $limit: limit * 2 
       }
     ]);
 
-    // Get popular Indian cities from hotels (as fallback)
+    
     const popularByHotels = await hotelModel.aggregate([
       {
         $match: {
@@ -204,14 +204,14 @@ const getIndianTrendingCities = async (limit = 8) => {
       }
     ]);
 
-    // Process and merge results
+    
     const processedBookings = trendingByBookings.map(item => formatIndianCityData(item, 'booking'));
     const processedHotels = popularByHotels.map(item => formatIndianCityData(item, 'hotel'));
 
-    // Merge and remove duplicates
+    
     const cityMap = new Map();
 
-    // Add booking cities first (higher priority)
+    
     processedBookings.forEach(city => {
       const key = `${city.name.toLowerCase()}-${city.state.toLowerCase()}`;
       if (!cityMap.has(key)) {
@@ -219,7 +219,7 @@ const getIndianTrendingCities = async (limit = 8) => {
       }
     });
 
-    // Add hotel cities (if not already present)
+    
     processedHotels.forEach(city => {
       const key = `${city.name.toLowerCase()}-${city.state.toLowerCase()}`;
       if (!cityMap.has(key) && cityMap.size < limit) {
@@ -227,10 +227,10 @@ const getIndianTrendingCities = async (limit = 8) => {
       }
     });
 
-    // Convert map to array and take required limit
+    
     let result = Array.from(cityMap.values()).slice(0, limit);
 
-    // If still not enough cities, add from predefined Indian cities
+    
     if (result.length < limit) {
       const additionalCities = getPopularIndianCities();
       additionalCities.forEach(city => {
@@ -249,7 +249,7 @@ const getIndianTrendingCities = async (limit = 8) => {
   }
 };
 
-// Format Indian city data consistently
+
 const formatIndianCityData = (data, source) => {
   const cityName = data._id.city;
   const stateName = data._id.state || getIndianStateFromCity(cityName);
@@ -269,7 +269,7 @@ const formatIndianCityData = (data, source) => {
   };
 };
 
-// Helper: Get Indian state from city name
+
 const getIndianStateFromCity = (cityName) => {
   const cityStateMap = {
     'mumbai': 'Maharashtra',
@@ -309,7 +309,7 @@ const getIndianStateFromCity = (cityName) => {
   return cityStateMap[cityName.toLowerCase()] || 'India';
 };
 
-// Dynamic image fetching for INDIAN cities only
+
 const getIndianCityImageFromUnsplash = async (cityName, stateName) => {
   try {
     const accessKey = process.env.UNSPLASH_ACCESS_KEY;
@@ -317,7 +317,7 @@ const getIndianCityImageFromUnsplash = async (cityName, stateName) => {
       return getDefaultIndianCityImage(cityName);
     }
 
-    // Search specifically for Indian cities
+    
     const query = `${cityName} ${stateName} India city landscape tourism`;
 
     const response = await axios.get('https://api.unsplash.com/search/photos', {
@@ -334,7 +334,7 @@ const getIndianCityImageFromUnsplash = async (cityName, stateName) => {
       return response.data.results[0].urls.regular;
     }
 
-    // Fallback to city name only with India
+    
     const fallbackResponse = await axios.get('https://api.unsplash.com/search/photos', {
       params: {
         query: `${cityName} India city`,
@@ -355,7 +355,7 @@ const getIndianCityImageFromUnsplash = async (cityName, stateName) => {
   }
 };
 
-// Predefined popular Indian cities
+
 const getPopularIndianCities = () => {
   const popularIndianCities = [
     { city: "Mumbai", state: "Maharashtra" },
@@ -390,33 +390,33 @@ const getPopularIndianCities = () => {
   }));
 };
 
-// Default Indian city images
+
 const getDefaultIndianCityImage = (cityName) => {
   const defaultImages = {
-    'mumbai': 'https://images.unsplash.com/photo-1562979314-bee7453e04c2?w=800',
+    'mumbai': 'https://images.unsplash.com/photo-1570160974745-2118db820464?w=800',
     'delhi': 'https://images.unsplash.com/photo-1587474260584-136574528ed5?w=800',
-    'bangalore': 'https://images.unsplash.com/photo-1596176530529-78163a4f7af2?w=800',
-    'hyderabad': 'https://images.unsplash.com/photo-1595665593673-bf1ad72905c0?w=800',
-    'chennai': 'https://images.unsplash.com/photo-1595665593673-bf1ad72905c0?w=800',
-    'kolkata': 'https://images.unsplash.com/photo-1587471385290-4c5b7bb6de5c?w=800',
-    'pune': 'https://images.unsplash.com/photo-1596176530529-78163a4f7af2?w=800',
-    'jaipur': 'https://images.unsplash.com/photo-1599661046286-20e06700eb92?w=800',
+    'bangalore': 'https://images.unsplash.com/photo-1596760449250-d9b980d09798?w=800',
+    'hyderabad': 'https://images.unsplash.com/photo-1572445271230-a78b5944a659?w=800',
+    'chennai': 'https://images.unsplash.com/photo-1582510003544-4d00b7f74220?w=800',
+    'kolkata': 'https://images.unsplash.com/photo-1558431382-27e39cbef4bc?w=800',
+    'pune': 'https://images.unsplash.com/photo-1566371486490-560ded239dae?w=800',
+    'jaipur': 'https://images.unsplash.com/photo-1599661046289-e31897846e41?w=800',
     'goa': 'https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?w=800',
     'kerala': 'https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?w=800',
-    'varanasi': 'https://images.unsplash.com/photo-1587471385290-4c5b7bb6de5c?w=800',
-    'leh': 'https://images.unsplash.com/photo-1587471385290-4c5b7bb6de5c?w=800',
-    'shimla': 'https://images.unsplash.com/photo-1587471385290-4c5b7bb6de5c?w=800',
-    'udaipur': 'https://images.unsplash.com/photo-1599661046286-20e06700eb92?w=800',
+    'varanasi': 'https://images.unsplash.com/photo-1561361513-2d000a50f0dc?w=800',
+    'leh': 'https://images.unsplash.com/photo-1581793745862-99fde7fa73d2?w=800',
+    'shimla': 'https://images.unsplash.com/photo-1562670225-48adc073bb18?w=800',
+    'udaipur': 'https://images.unsplash.com/photo-1591544607730-845763914c81?w=800',
     'agra': 'https://images.unsplash.com/photo-1564507592333-c60657eea523?w=800',
-    'default': 'https://images.unsplash.com/photo-1548013146-72479768bada?w=800' // Generic India image
+    'default': 'https://images.unsplash.com/photo-1514222139-b576be2ce086?w=800',
   };
 
   const key = cityName.toLowerCase();
   return defaultImages[key] || defaultImages.default;
 };
 
-// ================================================================================================================
-// GET /api/home/coffee-dates
+
+
 export const getCoffeeDates = async (req, res) => {
   try {
     const limit = Number(req.query.limit) || 6;
@@ -451,8 +451,8 @@ export const getCoffeeDates = async (req, res) => {
   }
 };
 
-// ================================================================================================================
-// GET /api/home/browse-by-property-type
+
+
 export const getBrowseByPropertyTypes = async (req, res) => {
   try {
     const hotelCount = await hotelModel.countDocuments();
@@ -460,8 +460,8 @@ export const getBrowseByPropertyTypes = async (req, res) => {
     const cafeCount = await cafeModel.countDocuments({ status: "active" });
     const hallCount = await hallModel.countDocuments({ isAvailable: true });
 
-    // Since we don't have distinct property type models, we use existing models and map them
-    // Fetch a sample image for each type
+    
+    
     const hotelSample = await hotelModel.findOne({ images: { $ne: [] } }).select('images');
     const restroSample = await restroModel.findOne({ 'images.featured': { $ne: null } }).select('images');
     const cafeSample = await cafeModel.findOne({ images: { $ne: [] } }).select('images');
@@ -471,22 +471,22 @@ export const getBrowseByPropertyTypes = async (req, res) => {
       {
         type: "Hotel",
         count: hotelCount,
-        image: hotelSample?.images?.[0] || "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800"
+        image: hotelSample?.images?.[0] || "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
       },
       {
         type: "Restaurant",
         count: restroCount,
-        image: restroSample?.images?.featured || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800"
+        image: restroSample?.images?.featured || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800",
       },
       {
         type: "Cafe",
         count: cafeCount,
-        image: cafeSample?.images?.[0] || "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=800"
+        image: cafeSample?.images?.[0] || "https://images.unsplash.com/photo-1501339817308-5d3c11d04467?w=800",
       },
       {
         type: "Hall",
         count: hallCount,
-        image: hallSample?.images?.featuredImage || "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=800"
+        image: hallSample?.images?.featuredImage || "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=800",
       }
     ];
 
@@ -501,8 +501,8 @@ export const getBrowseByPropertyTypes = async (req, res) => {
   }
 };
 
-// ================================================================================================================
-// GET /api/special-offers
+
+
 export const getSpecialOffers = async (req, res) => {
   try {
     const topOffer = await offerModel.findOne({
@@ -513,7 +513,7 @@ export const getSpecialOffers = async (req, res) => {
     let discountText = "50% OFF";
     let title = "Get Up to";
     let subtitle = "on your dining";
-    let backgroundImage = "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800";
+    let backgroundImage = "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1200";
 
     if (topOffer) {
       if (topOffer.discountText) discountText = topOffer.discountText;
@@ -540,21 +540,21 @@ export const getSpecialOffers = async (req, res) => {
   }
 };
 
-// ================================================================================================================
-// GET /api/luxury-stays
+
+
 export const getLuxuryStays = async (req, res) => {
   try {
     const { city, limit = 4 } = req.query;
 
-    // Build query
+    
     let query = {};
     if (city) {
       query["address.city"] = new RegExp(city, "i");
     }
 
-    // Fetch from hotelModel, sorting by highest price or rating to simulate "luxury"
+    
     const luxuryHotels = await hotelModel.find(query)
-      .sort({ averageRating: -1 }) // Assuming luxury means highly rated or we could sort by price
+      .sort({ averageRating: -1 }) 
       .limit(parseInt(limit));
 
     const formatHotel = (hotel) => {
@@ -571,7 +571,7 @@ export const getLuxuryStays = async (req, res) => {
 
     let data = luxuryHotels.map(formatHotel);
 
-    // If no hotels found for the specific city, fallback to top generic ones
+    
     if (data.length === 0) {
       const fallbackHotels = await hotelModel.find({})
         .sort({ averageRating: -1 })

@@ -12,7 +12,7 @@ const bookingModels = [
   { type: "Hall", model: hallBookingModel, populateKey: "hallId" },
 ];
 
-// Helper function to format currency
+
 const formatCurrency = (amount, currency = 'INR') => {
   const formatter = new Intl.NumberFormat('en-IN', {
     style: 'currency',
@@ -22,7 +22,7 @@ const formatCurrency = (amount, currency = 'INR') => {
   return formatter.format(amount);
 };
 
-// Helper function to format date
+
 const formatDate = (date) => {
   return new Date(date).toLocaleDateString('en-IN', {
     weekday: 'long',
@@ -32,7 +32,7 @@ const formatDate = (date) => {
   });
 };
 
-// Helper function to format time
+
 const formatTime = (time) => {
   return new Date(`2000-01-01T${time}`).toLocaleTimeString('en-IN', {
     hour: '2-digit',
@@ -50,7 +50,7 @@ export const downloadBookingInvoice = async (req, res) => {
     let bookingType = "";
     let businessKey = "";
 
-    // Find booking across all types
+    
     for (const { type, model, populateKey } of bookingModels) {
       const found = await model
         .findOne({ _id: id, userId })
@@ -81,15 +81,15 @@ export const downloadBookingInvoice = async (req, res) => {
     const doc = new PDFDocument({ margin: 50, size: 'A4' });
     doc.pipe(res);
 
-    // ===== HEADER SECTION =====
-    // ===== HEADER SECTION =====
+    
+    
     const pageWidth = doc.page.width;
     const leftMargin = 50;
-    const rightMargin = pageWidth - 50; // 50px from right edge
+    const rightMargin = pageWidth - 50; 
 
     doc.rect(0, 0, pageWidth, 100).fill("#1a365d");
 
-    // Left side content
+    
     doc.fillColor("white")
       .fontSize(24)
       .font("Helvetica-Bold")
@@ -99,11 +99,11 @@ export const downloadBookingInvoice = async (req, res) => {
       .text("Travel & Hospitality Services", leftMargin, 65)
       .text("contact@bookings.com | +91-9876543210", leftMargin, 80);
 
-    // Right side content - with proper spacing
-    const rightContentWidth = 220; // Increased width for better spacing
+    
+    const rightContentWidth = 220; 
     const rightContentStart = rightMargin - rightContentWidth;
 
-    // Calculate positions for right-aligned content
+    
     const lineHeight = 15;
     let rightY = 35;
 
@@ -115,15 +115,15 @@ export const downloadBookingInvoice = async (req, res) => {
       })
       .font("Helvetica")
       .text(`${invoiceId}`, rightContentStart, rightY, {
-        width: rightContentWidth - 60, // Reduced width for just the ID
+        width: rightContentWidth - 60, 
         align: "right"
       });
 
     rightY += lineHeight;
-    // doc.text(`Date: ${invoiceDate}`, rightContentStart, rightY, {
-    //   width: rightContentWidth,
-    //   align: "right"
-    // });
+    
+    
+    
+    
 
     rightY += lineHeight;
     doc.text(`Type: ${bookingType}`, rightContentStart, rightY, {
@@ -132,18 +132,18 @@ export const downloadBookingInvoice = async (req, res) => {
     });
 
     rightY += lineHeight;
-    // const status = booking.bookingStatus || booking.status || "Confirmed";
-    // doc.text(`Status: ${status}`, rightContentStart, rightY, {
-    //   width: rightContentWidth,
-    //   align: "right"
-    // });
+    
+    
+    
+    
+    
 
     doc.moveDown(4);
 
-    // ===== CUSTOMER & BUSINESS DETAILS =====
+    
     const sectionTop = doc.y;
 
-    // Customer Details
+    
     doc.rect(50, sectionTop, 250, 80).fill("#f7fafc").stroke("#e2e8f0");
     doc.fillColor("#2d3748")
       .fontSize(14)
@@ -157,7 +157,7 @@ export const downloadBookingInvoice = async (req, res) => {
       .text(`Email: ${booking.userId?.email || booking.guest?.email || "N/A"}`, 60, sectionTop + 45)
       .text(`Phone: ${booking.userId?.contactNo || booking.guest?.phone || "N/A"}`, 60, sectionTop + 60);
 
-    // Business Details
+    
     doc.rect(310, sectionTop, 240, 80).fill("#f7fafc").stroke("#e2e8f0");
     doc.fillColor("#2d3748")
       .fontSize(14)
@@ -172,17 +172,17 @@ export const downloadBookingInvoice = async (req, res) => {
 
     doc.moveDown(6);
 
-    // ===== BOOKING DETAILS SECTION =====
+    
     doc.fillColor("#2d3748")
       .fontSize(16)
       .font("Helvetica-Bold")
       .text("BOOKING INFORMATION", 50, doc.y);
 
-    // Create booking details table
+    
     const bookingDetails = getBookingDetails(booking, bookingType);
     const tableTop = doc.y + 20;
 
-    // Table header
+    
     doc.rect(50, tableTop, 500, 25).fill("#2d3748");
     doc.fillColor("white")
       .fontSize(11)
@@ -192,7 +192,7 @@ export const downloadBookingInvoice = async (req, res) => {
 
     let currentY = tableTop + 25;
 
-    // Table rows
+    
     bookingDetails.forEach((detail, index) => {
       const bgColor = index % 2 === 0 ? "#f7fafc" : "#ffffff";
       doc.rect(50, currentY, 500, 20).fill(bgColor).stroke("#e2e8f0");
@@ -212,7 +212,7 @@ export const downloadBookingInvoice = async (req, res) => {
 
     doc.y = currentY + 30;
 
-    // ===== PAYMENT DETAILS SECTION =====
+    
     doc.fillColor("#2d3748")
       .fontSize(16)
       .font("Helvetica-Bold")
@@ -221,7 +221,7 @@ export const downloadBookingInvoice = async (req, res) => {
     const paymentDetails = getPaymentDetails(booking, bookingType);
     const paymentTableTop = doc.y + 20;
 
-    // Payment table header
+    
     doc.rect(50, paymentTableTop, 500, 25).fill("#2d3748");
     doc.fillColor("white")
       .fontSize(11)
@@ -231,7 +231,7 @@ export const downloadBookingInvoice = async (req, res) => {
 
     let paymentY = paymentTableTop + 25;
 
-    // Payment rows
+    
     paymentDetails.forEach((item, index) => {
       const bgColor = index % 2 === 0 ? "#f7fafc" : "#ffffff";
       doc.rect(50, paymentY, 500, 20).fill(bgColor).stroke("#e2e8f0");
@@ -248,7 +248,7 @@ export const downloadBookingInvoice = async (req, res) => {
 
     doc.y = paymentY + 40;
 
-    // ===== PAYMENT STATUS =====
+    
     const paymentStatus = booking.payment?.paymentStatus || booking.paymentStatus || 'pending';
     const statusColor = paymentStatus === 'completed' ? '#38a169' :
       paymentStatus === 'pending' ? '#d69e2e' : '#e53e3e';
@@ -266,7 +266,7 @@ export const downloadBookingInvoice = async (req, res) => {
 
     doc.moveDown(3);
 
-    // ===== TERMS & CONDITIONS =====
+    
     doc.fillColor("#2d3748")
       .fontSize(12)
       .font("Helvetica-Bold")
@@ -282,7 +282,7 @@ export const downloadBookingInvoice = async (req, res) => {
 
     doc.moveDown(4);
 
-    // ===== FOOTER =====
+    
     doc.fillColor("#718096")
       .fontSize(8)
       .text("Thank you for your booking! For any queries, contact support@bookings.com",
@@ -297,7 +297,7 @@ export const downloadBookingInvoice = async (req, res) => {
   }
 };
 
-// Helper functions
+
 const getBusinessAddress = (business, type) => {
   switch (type) {
     case 'Restaurant':

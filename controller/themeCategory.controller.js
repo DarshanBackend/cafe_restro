@@ -2,9 +2,9 @@ import themeCategoryModel from "../model/themeCategory.model.js";
 import { uploadToS3, resizeImage, deleteFromS3 } from "../middleware/uploadS3.js";
 import { sendError, sendSuccess, sendNotFound, sendBadRequest } from "../utils/responseUtils.js";
 import log from "../utils/logger.js";
-import mongoose from "mongoose"; // Mongoose ઈમ્પોર્ટ કરવું પડશે
+import mongoose from "mongoose"; 
 
-// 1. Create Theme Category
+
 export const createThemeCategory = async (req, res) => {
     try {
         const { name, area } = req.body;
@@ -54,7 +54,7 @@ export const createThemeCategory = async (req, res) => {
     }
 }
 
-// 2. Get All Theme Categories
+
 export const getAllThemeCategories = async (req, res) => {
     try {
         const { area } = req.query;
@@ -67,12 +67,12 @@ export const getAllThemeCategories = async (req, res) => {
     }
 }
 
-// 3. Get Single Theme Category
+
 export const getThemeCategory = async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Invalid ID Check
+        
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return sendBadRequest(res, "Invalid Theme Category ID format");
         }
@@ -90,12 +90,12 @@ export const getThemeCategory = async (req, res) => {
     }
 }
 
-// 4. Update Theme Category
+
 export const updateThemeCategory = async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Invalid ID Check
+        
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return sendBadRequest(res, "Invalid Theme Category ID format");
         }
@@ -146,7 +146,7 @@ export const updateThemeCategory = async (req, res) => {
     }
 }
 
-// 5. Delete Theme Category
+
 export const deleteThemeCategory = async (req, res) => {
     try {
         const { id } = req.params;

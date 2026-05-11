@@ -6,6 +6,7 @@ import userModel from "../model/user.model.js";
 import { sendBadRequest, sendError, sendNotFound, sendSuccess } from "../utils/responseUtils.js";
 import log from "../utils/logger.js";
 import reviewModel from "../model/review.model.js";
+import coupanModel from "../model/coupan.model.js";
 
 export const createHall = async (req, res) => {
   try {
@@ -441,7 +442,7 @@ export const deleteGalleryImage = async (req, res) => {
 export const getPreviewBillingOfHall = async (req, res) => {
   try {
     const { hallId } = req.params;
-    const { startDate, endDate, startTime, endTime, peoples } = req.body;
+    const { startDate, endDate, startTime, endTime, peoples, couponCode } = req.body;
 
     if (!hallId || !mongoose.Types.ObjectId.isValid(hallId)) {
       return sendBadRequest(res, "Invalid hall ID");
@@ -486,9 +487,39 @@ export const getPreviewBillingOfHall = async (req, res) => {
     const discountAmount = (actualPrice * discountPercentage) / 100;
     const amountAfterDiscount = actualPrice - discountAmount;
 
+    let couponDetails = null;
+    let amountAfterCoupon = amountAfterDiscount;
+
+    if (couponCode) {
+      const coupon = await coupanModel.findOne({ couponCode: couponCode.toUpperCase() });
+      
+      if (!coupon) {
+        return sendBadRequest(res, "Invalid coupon code");
+      }
+      
+      if (!coupon.isActive) {
+        return sendBadRequest(res, "This coupon is no longer active");
+      }
+      
+      if (coupon.couponExpire && new Date(coupon.couponExpire) < new Date()) {
+        return sendBadRequest(res, "This coupon has expired");
+      }
+
+      const couponDiscountPercent = coupon.couponPerc || 0;
+      const couponDiscountAmount = (amountAfterDiscount * couponDiscountPercent) / 100;
+      amountAfterCoupon = amountAfterDiscount - couponDiscountAmount;
+
+      couponDetails = {
+        code: coupon.couponCode,
+        discountPercent: couponDiscountPercent,
+        discountAmount: couponDiscountAmount,
+        description: `Additional ${couponDiscountPercent}% Coupon Discount Applied`,
+      };
+    }
+
     const taxesAndFeesPercentage = 23;
-    const taxesAndFeesAmount = (amountAfterDiscount * taxesAndFeesPercentage) / 100;
-    const totalAmount = amountAfterDiscount + taxesAndFeesAmount;
+    const taxesAndFeesAmount = (amountAfterCoupon * taxesAndFeesPercentage) / 100;
+    const totalAmount = amountAfterCoupon + taxesAndFeesAmount;
 
     const round = (num) => Math.round(num * 100) / 100;
 
@@ -548,6 +579,11 @@ export const getPreviewBillingOfHall = async (req, res) => {
             label: "With Discount",
             value: `\u20B9${round(amountAfterDiscount).toFixed(2)}`
           },
+          couponDetails ? {
+            label: `Promo Code (${couponDetails.code})`,
+            value: `-₹${round(couponDetails.discountAmount).toFixed(2)}`,
+            type: "discount"
+          } : null,
           {
             label: "Taxes \u0026 Services",
             value: `\u20B9${round(taxesAndFeesAmount).toFixed(2)}`
@@ -557,9 +593,14 @@ export const getPreviewBillingOfHall = async (req, res) => {
             value: `\u20B9${round(totalAmount).toFixed(2)}`,
             bold: true
           }
-        ],
-        totalAmount: round(totalAmount).toFixed(2),
+        ].filter(Boolean),
+        totalAmount: round(totalAmount),
         currency: "INR",
+        coupon: couponDetails ? {
+          code: couponDetails.code,
+          discountPercent: couponDetails.discountPercent,
+          discountAmount: round(couponDetails.discountAmount)
+        } : null,
         proceedAction: "Process To Paid"
       }
     };

@@ -4,7 +4,7 @@ import { uploadToS3, deleteFromS3 } from "../middleware/uploadS3.js";
 import { sendSuccess, sendError, sendNotFound, sendBadRequest } from "../utils/responseUtils.js";
 import log from "../utils/logger.js";
 
-// Helper to get rating text
+
 const getRatingText = (rating) => {
     switch (Number(rating)) {
         case 1: return "Terrible";
@@ -16,7 +16,7 @@ const getRatingText = (rating) => {
     }
 };
 
-// Helper to update business ratings in its own model
+
 const updateBusinessRatingStats = async (businessType, businessId) => {
     const businessConfig = Object.values(BUSINESS_TYPES).find(config => config.type === businessType);
     if (!businessConfig) return;
@@ -48,11 +48,11 @@ export const addReview = async (req, res) => {
             return sendBadRequest(res, "Invalid business type");
         }
 
-        // Check if business exists
+        
         const business = await validType.model.findById(businessId);
         if (!business) return sendNotFound(res, "Business not found");
 
-        // Check for duplicate review
+        
         const existingReview = await reviewModel.findOne({
             userId,
             businessId,
@@ -64,7 +64,7 @@ export const addReview = async (req, res) => {
             return sendBadRequest(res, "You have already reviewed this business");
         }
 
-        // Handle Media Uploads
+        
         const media = [];
         if (req.files && req.files.media) {
             const files = Array.isArray(req.files.media) ? req.files.media : [req.files.media];
@@ -89,7 +89,7 @@ export const addReview = async (req, res) => {
             media,
         });
 
-        // Update business stats
+        
         await updateBusinessRatingStats(businessType, businessId);
 
         return sendSuccess(res, "Review added successfully", review);
@@ -117,7 +117,7 @@ export const deleteReview = async (req, res) => {
 
         await reviewModel.findByIdAndDelete(reviewId);
 
-        // Update business stats
+        
         await updateBusinessRatingStats(businessType, businessId);
 
         return sendSuccess(res, "Review permanently deleted by admin");
@@ -151,7 +151,7 @@ export const getBusinessReviews = async (req, res) => {
 
         const total = await reviewModel.countDocuments(query);
 
-        // Stats calculation
+        
         const stats = await reviewModel.aggregate([
             { $match: { businessId: new mongoose.Types.ObjectId(businessId), isActive: true } },
             {
@@ -212,7 +212,7 @@ export const likeReview = async (req, res) => {
         const review = await reviewModel.findById(reviewId);
         if (!review) return sendNotFound(res, "Review not found");
 
-        // Remove from dislikes if present
+        
         review.dislikes = review.dislikes.filter(id => id.toString() !== userId.toString());
 
         const alreadyLiked = review.likes.some(id => id.toString() === userId.toString());
@@ -241,7 +241,7 @@ export const dislikeReview = async (req, res) => {
         const review = await reviewModel.findById(reviewId);
         if (!review) return sendNotFound(res, "Review not found");
 
-        // Remove from likes if present
+        
         review.likes = review.likes.filter(id => id.toString() !== userId.toString());
 
         const alreadyDisliked = review.dislikes.some(id => id.toString() === userId.toString());
