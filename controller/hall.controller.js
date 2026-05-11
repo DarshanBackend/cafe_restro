@@ -525,22 +525,20 @@ export const getPreviewBillingOfHall = async (req, res) => {
 
     const formatToAMPM = (timeStr) => {
       if (!timeStr) return null;
-      
+
       // Clean the string and extract components
       const match = timeStr.toLowerCase().match(/(\d{1,2}):(\d{2})\s*(am|pm)?/);
       if (!match) return { time: timeStr, ampm: null };
 
       let [_, hours, minutes, ampm] = match;
       let h = parseInt(hours);
-      
+
       if (ampm) {
-        // If ampm was already present, just normalize it
         return {
           time: `${h}:${minutes}`,
           ampm: ampm.toUpperCase()
         };
       } else {
-        // If 24-hour format, convert to 12-hour
         const finalAmpm = h >= 12 ? 'PM' : 'AM';
         h = h % 12;
         h = h ? h : 12;
