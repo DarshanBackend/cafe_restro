@@ -51,7 +51,7 @@ export const createHallBooking = async (req, res) => {
       return sendBadRequest(res, "Invalid date format. Please use DD-MM-YYYY");
     }
 
-    if (end <= start) {
+    if (end < start) {
       return sendBadRequest(res, "End date must be after start date");
     }
 
@@ -68,23 +68,8 @@ export const createHallBooking = async (req, res) => {
       return sendBadRequest(res, `Hall capacity exceeded. Maximum capacity is ${hall.capacity} people.`);
     }
 
-    const existingBooking = await hallBookingModel.findOne({
-      hallId,
-      bookingStatus: { $in: ['pending', 'Confirmed', 'Upcoming'] },
-      $or: [
-        {
-          startDate: { $lte: end },
-          endDate: { $gte: start }
-        }
-      ]
-    });
-
-    if (existingBooking) {
-      return sendBadRequest(res, "Hall is already booked for the selected dates");
-    }
-
     const currentDateTime = new Date();
-    currentDateTime.setHours(0,0,0,0);
+    currentDateTime.setHours(0, 0, 0, 0);
     if (start < currentDateTime) {
       return sendBadRequest(res, "Start date cannot be in the past");
     }

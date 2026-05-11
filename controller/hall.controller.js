@@ -5,6 +5,7 @@ import adminModel from "../model/admin.model.js";
 import userModel from "../model/user.model.js";
 import { sendBadRequest, sendError, sendNotFound, sendSuccess } from "../utils/responseUtils.js";
 import log from "../utils/logger.js";
+import reviewModel from "../model/review.model.js";
 
 
 // In your controller - CHANGE THIS:
@@ -184,6 +185,36 @@ export const getHallById = async (req, res) => {
       return sendNotFound(res, "Hall not found");
     }
 
+    // Fetch reviews
+    const reviews = await reviewModel.find({ businessId: id, businessType: 'Hall', isActive: true })
+      .populate('userId', 'name avatar profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+
+    // Stats calculation
+    const stats = await reviewModel.aggregate([
+      { $match: { businessId: new mongoose.Types.ObjectId(id), businessType: 'Hall', isActive: true } },
+      {
+        $group: {
+          _id: "$rating",
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let totalCount = 0;
+    let sumRating = 0;
+
+    stats.forEach(s => {
+      distribution[s._id] = s.count;
+      totalCount += s.count;
+      sumRating += (s._id * s.count);
+    });
+
+    const averageRating = totalCount > 0 ? Number((sumRating / totalCount).toFixed(1)) : 0;
+
     // Standardized response for premium UI
     const result = {
       _id: hall._id,
@@ -196,8 +227,8 @@ export const getHallById = async (req, res) => {
       type: hall.type,
       category: hall.category,
       capacity: hall.capacity,
-      rating: hall.rating || 0,
-      reviewCount: hall.reviewCount || 0,
+      rating: averageRating,
+      reviewCount: totalCount,
       amenities: hall.amenities || [],
       image: hall.image || null,
       ourService: hall.ourService || {
@@ -206,7 +237,16 @@ export const getHallById = async (req, res) => {
         helpSupport: null
       },
       isAvailable: hall.isAvailable,
-      admin: hall.adminId
+      admin: hall.adminId,
+      reviews: reviews.map(r => ({
+        ...r,
+        ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
+      })),
+      reviewSummary: {
+        average: averageRating,
+        totalReviews: totalCount,
+        distribution
+      }
     };
 
     return sendSuccess(res, "Hall details fetched successfully", result);
