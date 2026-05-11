@@ -528,15 +528,20 @@ export const previewRestroBooking = async (req, res) => {
               },
               {
                 label: "Discount",
-                value: `${discountPercentage + (couponDetails ? couponDetails.discountPercent : 0)}%`,
+                value: "10%",
                 color: "blue"
               },
               {
                 label: "With Discount",
-                value: `\u20B9${round(amountAfterCoupon).toFixed(2)}`
+                value: `\u20B9${round(discountPrice).toFixed(2)}`
               },
+              ...(couponDetails ? [{
+                label: `Promo Code (${couponDetails.code})`,
+                value: `-₹${round(couponDetails.discountAmount).toFixed(2)}`,
+                type: "discount"
+              }] : []),
               {
-                label: "Taxes \u0026 Services",
+                label: "Taxes & Services",
                 value: `\u20B9${round(taxesAndFeesAmount).toFixed(2)}`
               },
               {
@@ -545,7 +550,7 @@ export const previewRestroBooking = async (req, res) => {
                 bold: true
               }
             ],
-            totalAmount: round(totalAmount).toFixed(2),
+            totalAmount: round(totalAmount),
             currency: "INR",
             coupon: couponDetails ? {
               code: couponDetails.code,

@@ -126,6 +126,46 @@ export const previewStayBooking = async (req, res) => {
         }),
         payableAmount: amountAfterCoupon,
         currency: "INR"
+      },
+      paymentSummary: {
+        title: "Payment Information",
+        items: [
+          {
+            label: `${totalHours} Hour(s) Stay`,
+            value: `₹${round2(actualPrice).toFixed(2)}`
+          },
+          {
+            label: "Discount",
+            value: `${discountPercentage}%`,
+            color: "blue"
+          },
+          {
+            label: "With Discount",
+            value: `₹${round2(discountPrice).toFixed(2)}`
+          },
+          ...(appliedCouponCode ? [{
+            label: `Promo Code (${appliedCouponCode})`,
+            value: `-₹${round2(couponDiscount).toFixed(2)}`,
+            type: "discount"
+          }] : []),
+          {
+            label: "Taxes & Services",
+            value: `₹${round2(taxesAndFeesAmount).toFixed(2)}`
+          },
+          {
+            label: "Total Amount of Paid",
+            value: `₹${round2(amountAfterCoupon).toFixed(2)}`,
+            bold: true
+          }
+        ],
+        totalAmount: round2(amountAfterCoupon),
+        currency: "INR",
+        coupon: appliedCouponCode ? {
+          code: appliedCouponCode,
+          discountPercent: couponDiscountPercentage,
+          discountAmount: couponDiscount
+        } : null,
+        proceedAction: "Process To Paid"
       }
     }]);
   } catch (error) {

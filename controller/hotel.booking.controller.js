@@ -355,36 +355,32 @@ export const previewHotelBooking = async (req, res) => {
             items: [
               {
                 label: `${numberOfRooms} Room * ${numberOfNights} Night`,
-                value: round(totalRoomRate).toFixed(2),
-                prefix: "₹"
+                value: `₹${round(totalRoomRate).toFixed(2)}`
               },
               {
-                label: "Mandatory Discount (10%)",
-                value: `-₹${round(discountAmount).toFixed(2)}`,
-                type: "discount"
+                label: "Discount",
+                value: "10%",
+                color: "blue"
               },
               {
-                label: "Price After Mandatory Discount",
-                value: round(discountPrice).toFixed(2),
-                prefix: "₹"
+                label: "With Discount",
+                value: `₹${round(discountPrice).toFixed(2)}`
               },
-              couponDetails ? {
+              ...(couponDetails ? [{
                 label: `Promo Code (${couponDetails.code})`,
                 value: `-₹${round(couponDetails.discountAmount).toFixed(2)}`,
                 type: "discount"
-              } : null,
+              }] : []),
               {
-                label: "Taxes (18%) & Services (5%)",
-                value: round(taxesAndFeesAmount).toFixed(2),
-                prefix: "₹"
+                label: "Taxes & Services",
+                value: `₹${round(taxesAndFeesAmount).toFixed(2)}`
               },
               {
                 label: "Total Amount of Paid",
-                value: round(totalAmount).toFixed(2),
-                prefix: "₹",
+                value: `₹${round(totalAmount).toFixed(2)}`,
                 bold: true
               }
-            ].filter(Boolean),
+            ],
             totalAmount: round(totalAmount),
             currency: "INR",
             coupon: couponDetails || null,
