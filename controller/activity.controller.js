@@ -4,6 +4,7 @@ import pLimit from "p-limit";
 import { sendError, sendSuccess } from "../utils/responseUtils.js";
 import hotelModel from "../model/hotel.model.js";
 import stayModel from "../model/stay.model.js";
+import watchListModel from "../model/watchlist.model.js";
 
 
 const cityCache = new Map();
@@ -465,6 +466,12 @@ export const getHotelByCity = async (req, res) => {
 
     const hotels = await hotelModel.find({ "address.city": new RegExp(city, "i") }).lean();
 
+    let favoriteHotelIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteHotelIds = watchlist ? watchlist.hotels.map(id => id.toString()) : [];
+    }
+
     const formattedResults = hotels.map(h => ({
       id: h._id,
       type: "hotel",
@@ -475,7 +482,8 @@ export const getHotelByCity = async (req, res) => {
       image: h.images?.[0] || null,
       address: `${h.address?.street || ''}, ${h.address?.city || ''}`.replace(/^, |, $/g, '').trim(),
       price: h.discountPrice || h.actualPrice,
-      priceLabel: "Per Night"
+      priceLabel: "Per Night",
+      isFavorite: favoriteHotelIds.includes(h._id.toString())
     }));
 
     return sendSuccess(res, `Hotels found in ${city}`, formattedResults);

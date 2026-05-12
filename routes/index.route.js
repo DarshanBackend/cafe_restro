@@ -1,6 +1,7 @@
 import express from 'express';
 import { ForgotOtpSend, ResetPassword, VerifyOtp, changeUserPassword, deleteUser, getAllUsers, getUserById, getUserProfile, googleLogin, newUserRegister, updateUser, addUserAddress, getUserAddresses, updateAddress, deleteAddress, userLogin, userLogout } from '../controller/user.controller.js';
 import { UserAuth } from '../middleware/UserAuth.js';
+import { OptionalUserAuth } from '../middleware/OptionalUserAuth.js';
 import { adminLogin, adminUpdate, deleteAdmin, getAdminById, getAllAdmins, newAdminRegister } from '../controller/admin.controller.js';
 import { getWalletDetails, addMoneyToWallet, verifyWalletPayment } from '../controller/wallet.controller.js';
 import { AdminAuth } from '../middleware/AdminAuth.js';
@@ -34,6 +35,7 @@ import { createStay, deleteStay, getAllStays, getAdminStays, getStayById, update
 import { createThemeCategory, deleteThemeCategory, getAllThemeCategories, getThemeCategory, getThemesByArea, updateThemeCategory } from '../controller/themeCategory.controller.js';
 import { getMyBookingsUnified } from '../controller/my.bookings.controller.js';
 import { getFilteredResults } from '../controller/filter.controller.js';
+import { createFaq, deleteFaq, getAllFaqs, getFaqById, updateFaq } from '../controller/faq.controller.js';
 
 const indexRouter = express.Router();
 
@@ -47,7 +49,7 @@ indexRouter.get("/getAllUsers", getAllUsers);
 indexRouter.get("/getUserById/:id", getUserById);
 indexRouter.put("/updateUser/:id", upload.single("avatar"), updateUser);
 
-indexRouter.get("/filter", getFilteredResults);
+indexRouter.get("/filter", OptionalUserAuth, getFilteredResults);
 
 indexRouter.post("/addAddress", UserAuth, addUserAddress);
 indexRouter.get("/getAddresses", UserAuth, getUserAddresses);
@@ -70,19 +72,19 @@ indexRouter.get("/getAdminById/:adminId", getAdminById);
 indexRouter.patch("/adminUpdate/:adminId", adminUpdate);
 indexRouter.delete("/deleteAdmin/:adminId", deleteAdmin);
 
-indexRouter.get("/WhatsNew", WhatsNew)
+indexRouter.get("/WhatsNew", OptionalUserAuth, WhatsNew)
 indexRouter.get('/trending-destinations', getTrendingDestinations);
-indexRouter.get('/coffee-dates', getCoffeeDates);
+indexRouter.get('/coffee-dates', OptionalUserAuth, getCoffeeDates);
 indexRouter.get('/browse-by-property-type', getBrowseByPropertyTypes);
 indexRouter.get('/special-offers', getSpecialOffers);
-indexRouter.get('/luxury-stays', getLuxuryStays);
+indexRouter.get('/luxury-stays', OptionalUserAuth, getLuxuryStays);
 
 indexRouter.post("/createNewHotel", AdminAuth, uploadFiles, handleMulterErrors, processAndUploadImages, createNewHotel);
-indexRouter.get("/getAllHotels", getAllHotels);
-indexRouter.get("/getHotelById/:hotelId", getHotelById);
+indexRouter.get("/getAllHotels", OptionalUserAuth, getAllHotels);
+indexRouter.get("/getHotelById/:hotelId", OptionalUserAuth, getHotelById);
 indexRouter.patch("/updateHotel/:hotelId", AdminAuth, uploadFiles, updateHotel);
 indexRouter.delete("/deleteHotel/:hotelId", AdminAuth, deleteHotels);
-indexRouter.get("/getHotelByCityName/:name", getHotelByCityName);
+indexRouter.get("/getHotelByCityName/:name", OptionalUserAuth, getHotelByCityName);
 indexRouter.get("/city-suggestions", getCitySuggestions);
 
 indexRouter.post("/hotel/createBooking/:hotelId", UserAuth, createBooking);
@@ -98,7 +100,7 @@ indexRouter.get("/getWatchlist", UserAuth, getMyWatchlist);
 indexRouter.delete("/removeFromWatchlist", UserAuth, removeWatchlistItem);
 
 indexRouter.get("/cafeThemes", cafeThemes);
-indexRouter.get("/getCafesByTheme", getCafesByTheme);
+indexRouter.get("/getCafesByTheme", OptionalUserAuth, getCafesByTheme);
 
 indexRouter.post("/createThemeCategory", AdminAuth, upload.single("image"), createThemeCategory);
 indexRouter.get("/getAllThemeCategories", getAllThemeCategories);
@@ -107,12 +109,12 @@ indexRouter.get("/getThemesByArea", getThemesByArea);
 indexRouter.put("/updateThemeCategory/:id", AdminAuth, upload.single("image"), updateThemeCategory);
 indexRouter.delete("/deleteThemeCategory/:id", AdminAuth, deleteThemeCategory);
 
-indexRouter.get("/getAllCafes", getAllCafes);
-indexRouter.get("/search", searchCafes);
-indexRouter.get("/mainSearchCafes", mainSearchCafes);
-indexRouter.get("/location", getCafesByLocation);
-indexRouter.get("/popular", getPopularCafes);
-indexRouter.get("/getCafeById/:id", getCafeById);
+indexRouter.get("/getAllCafes", OptionalUserAuth, getAllCafes);
+indexRouter.get("/search", OptionalUserAuth, searchCafes);
+indexRouter.get("/mainSearchCafes", OptionalUserAuth, mainSearchCafes);
+indexRouter.get("/location", OptionalUserAuth, getCafesByLocation);
+indexRouter.get("/popular", OptionalUserAuth, getPopularCafes);
+indexRouter.get("/getCafeById/:id", OptionalUserAuth, getCafeById);
 
 indexRouter.post("/createCafe", AdminAuth, upload.any(), createNewCafe);
 indexRouter.put("/updateCafe/:id", AdminAuth, upload.any(), updateCafe);
@@ -130,18 +132,18 @@ indexRouter.put("/cafe/updateBookingStatus/:id", AdminAuth, updateBookingStatus)
 indexRouter.put("/cafe/updatePaymentStatus/:id", AdminAuth, updatePaymentStatus);
 
 indexRouter.post("/createNewRestro", AdminAuth, upload.array("images", 10), validateRestroDuplicate, createNewRestaurant);
-indexRouter.get("/getAllRestros", getAllRestos);
-indexRouter.get("/getRestroById/:id", getSingleRestro);
+indexRouter.get("/getAllRestros", OptionalUserAuth, getAllRestos);
+indexRouter.get("/getRestroById/:id", OptionalUserAuth, getSingleRestro);
 
 indexRouter.put("/updateRestro/:id", AdminAuth, upload.array("images", 10), updateRestaurant);
 indexRouter.post("/addRestroImage/:id/images", AdminAuth, upload.array('images', 10), addRestroImages);
 indexRouter.delete("/removeRestroImage/:id/images/:imageUrl", AdminAuth, removeRestroImage);
 indexRouter.delete("/deleteRestro/:id", AdminAuth, deleteRestaurant);
-indexRouter.get("/resto/filter/advanced", filterRestaurants);
-indexRouter.get("/restro/search", searchRestaurants);
+indexRouter.get("/resto/filter/advanced", OptionalUserAuth, filterRestaurants);
+indexRouter.get("/restro/search", OptionalUserAuth, searchRestaurants);
 indexRouter.get("/restro/changeStatus/:id", AdminAuth, restroChangeStatus);
-indexRouter.get("/restro/popular", getPopularRestros);
-indexRouter.get("/getRestrosByTheme", getRestrosByTheme);
+indexRouter.get("/restro/popular", OptionalUserAuth, getPopularRestros);
+indexRouter.get("/getRestrosByTheme", OptionalUserAuth, getRestrosByTheme);
 
 indexRouter.post("/restro/preview-booking/:restaurantId", previewRestroBooking);
 indexRouter.post("/createRestroBooking/:restaurantId", UserAuth, createRestaurantBooking);
@@ -153,9 +155,9 @@ indexRouter.get("/restro/:restroId", AdminAuth, getRestaurantBookings);
 indexRouter.put("/updateRestroBookingStatus/:bookingId", AdminAuth, updateRestaurantBookingStatus);
 indexRouter.put("/updateRestroPaymentStatus/:bookingId", AdminAuth, updateRestaurantPaymentStatus);
 
-indexRouter.get('/getAllHalls', getAllHalls);
-indexRouter.get('/getPopularHalls', getPopularHalls);
-indexRouter.get('/getHallById/:id', getHallById);
+indexRouter.get('/getAllHalls', OptionalUserAuth, getAllHalls);
+indexRouter.get('/getPopularHalls', OptionalUserAuth, getPopularHalls);
+indexRouter.get('/getHallById/:id', OptionalUserAuth, getHallById);
 indexRouter.post("/preview/billing/:hallId", UserAuth, getPreviewBillingOfHall)
 
 indexRouter.post("/createHall", AdminAuth, upload.fields([
@@ -182,21 +184,21 @@ indexRouter.get('/admin/getHallBookingById/:id', AdminAuth, getHallBookingById);
 
 indexRouter.get("/allCountries", getAllCountries)
 indexRouter.get("/getCityByCountry/:country", getCityByCountry);
-indexRouter.get("/getHotelByCity/:city", getHotelByCity);
-indexRouter.get("/searchHotels", searchHotels)
-indexRouter.get("/mainSearchHotels", mainSearchHotels)
+indexRouter.get("/getHotelByCity/:city", OptionalUserAuth, getHotelByCity);
+indexRouter.get("/searchHotels", OptionalUserAuth, searchHotels)
+indexRouter.get("/mainSearchHotels", OptionalUserAuth, mainSearchHotels)
 
-indexRouter.get("/getAllFeaturedEvents", getAllFeaturedEvents);
-indexRouter.get("/getFeaturedEventById/:id", getFeaturedEventById);
+indexRouter.get("/getAllFeaturedEvents", OptionalUserAuth, getAllFeaturedEvents);
+indexRouter.get("/getFeaturedEventById/:id", OptionalUserAuth, getFeaturedEventById);
 indexRouter.post("/addNewFeaturedEvent", AdminAuth, upload.fields([{ name: 'image', maxCount: 1 }]), addNewFeaturedEvent);
 indexRouter.put("/updateFeaturedEvent/:id", AdminAuth, upload.fields([{ name: 'image', maxCount: 1 }]), updateFeaturedEvent);
 indexRouter.delete("/deleteFeaturedEvent/:id", AdminAuth, deleteFeaturedEvent);
 
-indexRouter.get("/getAllEvents", getAllEvents);
-indexRouter.get("/searchEvents", searchEvents);
-indexRouter.get("/filterEvents", filterEvents);
+indexRouter.get("/getAllEvents", OptionalUserAuth, getAllEvents);
+indexRouter.get("/searchEvents", OptionalUserAuth, searchEvents);
+indexRouter.get("/filterEvents", OptionalUserAuth, filterEvents);
 indexRouter.get("/getEventStats", getEventStats);
-indexRouter.get("/getEventById/:id", getEventById);
+indexRouter.get("/getEventById/:id", OptionalUserAuth, getEventById);
 indexRouter.post("/addNewEvent", AdminAuth, upload.fields([{ name: 'eventImage', maxCount: 1 }]), addNewEvent);
 indexRouter.put("/updateEvent/:id", AdminAuth, upload.fields([{ name: 'eventImage', maxCount: 1 }]), updateEvent);
 indexRouter.delete("/deleteEvent/:id", AdminAuth, deleteEvent);
@@ -249,9 +251,9 @@ indexRouter.get("/admin/getStayBookingById/:id", AdminAuth, getStayBookingById);
 indexRouter.patch("/updateStayBookingStatus/:id", AdminAuth, updateStayBookingStatus);
 indexRouter.patch("/updateStayPaymentStatus/:id", AdminAuth, updateStayPaymentStatus);
 
-indexRouter.get("/getAllStays", getAllStays);
-indexRouter.get("/getStayById/:id", getStayById);
-indexRouter.get("/searchStay", searchStay);
+indexRouter.get("/getAllStays", OptionalUserAuth, getAllStays);
+indexRouter.get("/getStayById/:id", OptionalUserAuth, getStayById);
+indexRouter.get("/searchStay", OptionalUserAuth, searchStay);
 indexRouter.post("/stay/preview-booking/:stayId", UserAuth, previewStayBooking);
 indexRouter.post("/createStayBooking/:stayId", UserAuth, createStayBooking);
 indexRouter.get("/my-stay-bookings", UserAuth, getUserStayBookings);
@@ -267,6 +269,12 @@ indexRouter.delete("/deleteNotification/:id", AdminAuth, deleteNotification);
 indexRouter.get("/my/notifications", UserAuth, getMyNotifications);
 indexRouter.patch("/markNotificationAsRead/:id", UserAuth, markAsRead);
 indexRouter.delete("/deleteMyNotification/:id", UserAuth, deleteMyNotification);
+
+indexRouter.post("/createFaq", AdminAuth, createFaq);
+indexRouter.get("/getAllFaqs", getAllFaqs);
+indexRouter.get("/getFaqById/:id", getFaqById);
+indexRouter.put("/updateFaq/:id", AdminAuth, updateFaq);
+indexRouter.delete("/deleteFaq/:id", AdminAuth, deleteFaq);
 
 indexRouter.get("/s3/list", async (req, res) => {
   try {

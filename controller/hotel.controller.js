@@ -1,4 +1,5 @@
 import hotelModel from "../model/hotel.model.js";
+import watchListModel from "../model/watchlist.model.js";
 import adminModel from "../model/admin.model.js";
 import { resizeImage, uploadToS3, deleteFromS3 } from "../middleware/uploadS3.js";
 import sharp from "sharp";
@@ -82,9 +83,20 @@ export const createNewHotel = async (req, res) => {
 
 export const getAllHotels = async (req, res) => {
   try {
-    const hotels = await hotelModel.find({}).sort({ createdAt: -1 });
+    const hotels = await hotelModel.find({}).sort({ createdAt: -1 }).lean();
 
-    return sendSuccess(res, "Hotels fetched successfully", hotels);
+    let favoriteHotelIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteHotelIds = watchlist ? watchlist.hotels.map(id => id.toString()) : [];
+    }
+
+    const hotelsWithFavorite = hotels.map(hotel => ({
+      ...hotel,
+      isFavorite: favoriteHotelIds.includes(hotel._id.toString())
+    }));
+
+    return sendSuccess(res, "Hotels fetched successfully", hotelsWithFavorite);
 
   } catch (error) {
     log.error(error);
@@ -102,10 +114,16 @@ export const getHotelById = async (req, res) => {
 
     if (!hotelId) return sendError(res, 400, "Hotel ID is required");
 
-    const hotel = await hotelModel.findById(hotelId).populate('adminId');
+    const hotel = await hotelModel.findById(hotelId).populate('adminId').lean();
     if (!hotel) return sendError(res, 404, "Hotel not found");
 
-    return sendSuccess(res, "Hotel fetched successfully", hotel);
+    let isFavorite = false;
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      isFavorite = watchlist ? watchlist.hotels.some(id => id.toString() === hotel._id.toString()) : false;
+    }
+
+    return sendSuccess(res, "Hotel fetched successfully", { ...hotel, isFavorite });
 
   } catch (error) {
     log.error(error);
@@ -287,6 +305,18 @@ export const getHotelByCityName = async (req, res) => {
       } : null
     }));
 
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      const favoriteHotelIds = watchlist ? watchlist.hotels.map(id => id.toString()) : [];
+      transformedHotels.forEach(hotel => {
+        hotel.isFavorite = favoriteHotelIds.includes(hotel._id.toString());
+      });
+    } else {
+      transformedHotels.forEach(hotel => {
+        hotel.isFavorite = false;
+      });
+    }
+
     res.json({
       success: true,
       message: `Hotels in ${name} fetched successfully`,
@@ -397,7 +427,7 @@ export const searchHotels = async (req, res) => {
       ],
     };
 
-    const hotels = await hotelModel.find(searchCondition);
+    const hotels = await hotelModel.find(searchCondition).lean();
 
     if (hotels.length === 0) {
       return res.status(404).json({
@@ -406,10 +436,21 @@ export const searchHotels = async (req, res) => {
       });
     }
 
+    let favoriteHotelIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteHotelIds = watchlist ? watchlist.hotels.map(id => id.toString()) : [];
+    }
+
+    const hotelsWithFavorite = hotels.map(hotel => ({
+      ...hotel,
+      isFavorite: favoriteHotelIds.includes(hotel._id.toString())
+    }));
+
     return res.status(200).json({
       success: true,
       message: `${hotels.length} hotels found`,
-      data: hotels,
+      data: hotelsWithFavorite,
     });
   } catch (error) {
     console.error(`Error while searching hotels: ${error.message}`);
@@ -465,6 +506,17 @@ export const mainSearchHotels = async (req, res) => {
       .limit(20)
       .lean();
 
+    let favoriteHotelIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteHotelIds = watchlist ? watchlist.hotels.map(id => id.toString()) : [];
+    }
+
+    const hotelsWithFavorite = hotels.map(hotel => ({
+      ...hotel,
+      isFavorite: favoriteHotelIds.includes(hotel._id.toString())
+    }));
+
     return res.status(200).json({
       success: true,
       message: hotels.length ? "Hotels fetched successfully." : "No hotels available.",
@@ -476,7 +528,7 @@ export const mainSearchHotels = async (req, res) => {
         children: Number(children) || 0,
         rooms: Number(rooms) || 1
       },
-      result: hotels,
+      result: hotelsWithFavorite,
     });
   } catch (error) {
     console.error("Hotel Search Error:", error);

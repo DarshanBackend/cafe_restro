@@ -3,6 +3,7 @@ import hallModel from "../model/hall.model.js";
 import hotelModel from "../model/hotel.model.js";
 import restroModel from "../model/restro.model.js";
 import { sendError } from "../utils/responseUtils.js";
+import watchListModel from "../model/watchlist.model.js";
 import hotelBookingModel from "../model/hotel.booking.model.js";
 import axios from "axios";
 import stayModel from "../model/stay.model.js";
@@ -65,6 +66,25 @@ export const WhatsNew = async (req, res) => {
     combined.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
     const recent = combined.slice(0, limit);
+
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      if (watchlist) {
+        recent.forEach(item => {
+          const type = item.type;
+          const watchlistArray = type === 'hotel' ? watchlist.hotels :
+                                 type === 'restro' ? watchlist.restro :
+                                 type === 'cafe' ? watchlist.cafe :
+                                 type === 'hall' ? watchlist.hall : [];
+          
+          item.isFavorite = watchlistArray.some(id => id.toString() === item._id.toString());
+        });
+      } else {
+        recent.forEach(item => item.isFavorite = false);
+      }
+    } else {
+      recent.forEach(item => item.isFavorite = false);
+    }
 
     return res.status(200).json({
       success: true,
@@ -424,6 +444,12 @@ export const getCoffeeDates = async (req, res) => {
       .sort({ averageRating: -1, createdAt: -1 })
       .limit(limit);
 
+    let favoriteCafeIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteCafeIds = watchlist ? watchlist.cafe.map(id => id.toString()) : [];
+    }
+
     const data = cafes.map(c => {
       const obj = c.toObject();
       let image = null;
@@ -436,7 +462,8 @@ export const getCoffeeDates = async (req, res) => {
         image: image,
         rating: obj.averageRating || 0,
         location: obj.location?.city || "",
-        type: "cafe"
+        type: "cafe",
+        isFavorite: favoriteCafeIds.includes(obj._id.toString())
       };
     });
 
@@ -580,10 +607,21 @@ export const getLuxuryStays = async (req, res) => {
       data = fallbackHotels.map(formatHotel);
     }
 
+    let favoriteHotelIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteHotelIds = watchlist ? watchlist.hotels.map(id => id.toString()) : [];
+    }
+
+    const dataWithFavorite = data.map(item => ({
+      ...item,
+      isFavorite: favoriteHotelIds.includes(item.id.toString())
+    }));
+
     res.json({
       success: true,
       message: "Luxury stays fetched successfully",
-      data
+      data: dataWithFavorite
     });
   } catch (error) {
     console.error("Luxury stays error:", error);

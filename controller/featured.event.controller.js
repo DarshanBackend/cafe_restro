@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { deleteFromS3, uploadToS3 } from "../middleware/uploadS3.js";
 import eventModel from "../model/event.model.js";
+import watchListModel from "../model/watchlist.model.js";
 import adminModel from "../model/admin.model.js";
 import log from "../utils/logger.js";
 import { sendError, sendSuccess, sendBadRequest, sendNotFound } from "../utils/responseUtils.js";
@@ -44,8 +45,20 @@ export const addNewFeaturedEvent = async (req, res) => {
 
 export const getAllFeaturedEvents = async (req, res) => {
   try {
-    const events = await eventModel.find({ sectionType: 'Featured' }).sort({ createdAt: -1 });
-    return sendSuccess(res, "Featured Events retrieved successfully", events);
+    const events = await eventModel.find({ sectionType: 'Featured' }).sort({ createdAt: -1 }).lean();
+
+    let favoriteEventIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteEventIds = watchlist ? watchlist.event.map(id => id.toString()) : [];
+    }
+
+    const eventsWithFavorite = events.map(event => ({
+      ...event,
+      isFavorite: favoriteEventIds.includes(event._id.toString())
+    }));
+
+    return sendSuccess(res, "Featured Events retrieved successfully", eventsWithFavorite);
   } catch (error) {
     return sendError(res, "Error retrieving featured events", error);
   }
@@ -59,9 +72,16 @@ export const getFeaturedEventById = async (req, res) => {
       return sendBadRequest(res, "Invalid Event ID");
     }
 
-    const event = await eventModel.findOne({ _id: id, sectionType: 'Featured' });
+    const event = await eventModel.findOne({ _id: id, sectionType: 'Featured' }).lean();
     if (!event) return sendNotFound(res, "Featured Event not found");
-    return sendSuccess(res, "Featured Event retrieved successfully", event);
+
+    let isFavorite = false;
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      isFavorite = watchlist ? watchlist.event.some(eid => eid.toString() === event._id.toString()) : false;
+    }
+
+    return sendSuccess(res, "Featured Event retrieved successfully", { ...event, isFavorite });
   } catch (error) {
     return sendError(res, "Error retrieving featured event", error);
   }

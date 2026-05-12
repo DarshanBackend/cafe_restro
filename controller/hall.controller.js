@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { resizeImage, uploadToS3, deleteFromS3 } from "../middleware/uploadS3.js";
 import hallModel from "../model/hall.model.js";
+import watchListModel from "../model/watchlist.model.js";
 import adminModel from "../model/admin.model.js";
 import userModel from "../model/user.model.js";
 import { sendBadRequest, sendError, sendNotFound, sendSuccess } from "../utils/responseUtils.js";
@@ -137,13 +138,24 @@ export const getAllHalls = async (req, res) => {
 
     const total = await hallModel.countDocuments(filter);
 
+    let favoriteHallIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteHallIds = watchlist ? watchlist.hall.map(id => id.toString()) : [];
+    }
+
+    const hallsWithFavorite = halls.map(hall => ({
+      ...hall.toObject(),
+      isFavorite: favoriteHallIds.includes(hall._id.toString())
+    }));
+
     res.json({
       success: true,
       count: halls.length,
       total,
       page: Number(page),
       pages: Math.ceil(total / limit),
-      data: halls
+      data: hallsWithFavorite
     });
 
   } catch (error) {
@@ -231,6 +243,13 @@ export const getHallById = async (req, res) => {
       }
     };
 
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      result.isFavorite = watchlist ? watchlist.hall.some(id => id.toString() === hall._id.toString()) : false;
+    } else {
+      result.isFavorite = false;
+    }
+
     return sendSuccess(res, "Hall details fetched successfully", result);
 
   } catch (error) {
@@ -269,7 +288,7 @@ export const getPopularHalls = async (req, res) => {
         success: true,
         message: "Recent halls fetched successfully",
         count: recentHalls.length,
-        data: recentHalls
+        data: await attachHallFavorite(req, recentHalls)
       });
     }
 
@@ -277,7 +296,7 @@ export const getPopularHalls = async (req, res) => {
       success: true,
       message: "Popular halls fetched successfully",
       count: popularHalls.length,
-      data: popularHalls
+      data: await attachHallFavorite(req, popularHalls)
     });
 
   } catch (error) {
@@ -288,6 +307,21 @@ export const getPopularHalls = async (req, res) => {
       error: error.message
     });
   }
+};
+
+const attachHallFavorite = async (req, halls) => {
+  if (req.user?._id) {
+    const watchlist = await watchListModel.findOne({ userId: req.user._id });
+    const favoriteHallIds = watchlist ? watchlist.hall.map(id => id.toString()) : [];
+    return halls.map(hall => ({
+      ...hall.toObject(),
+      isFavorite: favoriteHallIds.includes(hall._id.toString())
+    }));
+  }
+  return halls.map(hall => ({
+    ...hall.toObject(),
+    isFavorite: false
+  }));
 };
 
 export const updateHall = async (req, res) => {

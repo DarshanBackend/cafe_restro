@@ -4,6 +4,7 @@ import restroModel from "../model/restro.model.js";
 import stayModel from "../model/stay.model.js";
 import { sendBadRequest, sendSuccess, sendError } from "../utils/responseUtils.js";
 import mongoose from "mongoose";
+import watchListModel from "../model/watchlist.model.js";
 
 export const getFilteredResults = async (req, res) => {
     try {
@@ -96,6 +97,26 @@ export const getFilteredResults = async (req, res) => {
             .lean();
 
         const total = await model.countDocuments(query);
+
+        if (req.user?._id) {
+            const watchlist = await watchListModel.findOne({ userId: req.user._id });
+            if (watchlist) {
+                const bType = businessType.toLowerCase();
+                const watchlistArray = bType === 'hotel' ? watchlist.hotels :
+                                       bType === 'restro' ? watchlist.restro :
+                                       bType === 'cafe' ? watchlist.cafe :
+                                       bType === 'hall' ? watchlist.hall : [];
+                
+                const favoriteIds = watchlistArray.map(id => id.toString());
+                results.forEach(item => {
+                    item.isFavorite = favoriteIds.includes(item._id.toString());
+                });
+            } else {
+                results.forEach(item => item.isFavorite = false);
+            }
+        } else {
+            results.forEach(item => item.isFavorite = false);
+        }
 
         return sendSuccess(res, `${businessType} filtered successfully`, {
             results,

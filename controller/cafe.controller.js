@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { deleteFromS3, resizeImage, uploadToS3 } from "../middleware/uploadS3.js";
+import watchListModel from "../model/watchlist.model.js";
 import cafeModel from "../model/cafe.model.js";
 import adminModel from "../model/admin.model.js";
 import { sendNotification } from "../utils/notification.utils.js";
@@ -266,9 +267,20 @@ export const getAllCafes = async (req, res) => {
 
     const total = await cafeModel.countDocuments(filter);
 
+    let favoriteCafeIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteCafeIds = watchlist ? watchlist.cafe.map(id => id.toString()) : [];
+    }
+
+    const cafesWithFavorite = cafes.map(cafe => ({
+      ...cafe.toObject(),
+      isFavorite: favoriteCafeIds.includes(cafe._id.toString())
+    }));
+
     return res.status(200).json({
       success: true,
-      data: cafes,
+      data: cafesWithFavorite,
       pagination: {
         current: pageNumber,
         totalPages: Math.ceil(total / pageSize),
@@ -313,11 +325,18 @@ export const getCafeById = async (req, res) => {
 
     const isOpen = cafe.isOpenNow();
 
+    let isFavorite = false;
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      isFavorite = watchlist ? watchlist.cafe.some(id => id.toString() === cafe._id.toString()) : false;
+    }
+
     return res.status(200).json({
       success: true,
       data: {
         ...cafe.toObject(),
-        isOpen
+        isOpen,
+        isFavorite
       }
     });
 
@@ -525,11 +544,22 @@ export const getCafesByLocation = async (req, res) => {
 
     const cafes = await cafeModel.find(filter).select("-__v");
 
+    let favoriteCafeIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteCafeIds = watchlist ? watchlist.cafe.map(id => id.toString()) : [];
+    }
+
+    const cafesWithFavorite = cafes.map(cafe => ({
+      ...cafe.toObject(),
+      isFavorite: favoriteCafeIds.includes(cafe._id.toString())
+    }));
+
     return res.status(200).json({
       success: true,
       count: cafes.length,
       filters: filter,
-      data: cafes,
+      data: cafesWithFavorite,
     });
 
   } catch (error) {
@@ -548,9 +578,20 @@ export const getPopularCafes = async (req, res) => {
 
     const cafes = await cafeModel.findPopular(parseInt(limit));
 
+    let favoriteCafeIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteCafeIds = watchlist ? watchlist.cafe.map(id => id.toString()) : [];
+    }
+
+    const cafesWithFavorite = cafes.map(cafe => ({
+      ...cafe.toObject(),
+      isFavorite: favoriteCafeIds.includes(cafe._id.toString())
+    }));
+
     return res.status(200).json({
       success: true,
-      data: cafes,
+      data: cafesWithFavorite,
       count: cafes.length
     });
 
@@ -603,6 +644,17 @@ export const searchCafes = async (req, res) => {
 
     const total = await cafeModel.countDocuments(filter);
 
+    let favoriteCafeIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteCafeIds = watchlist ? watchlist.cafe.map(id => id.toString()) : [];
+    }
+
+    const cafesWithFavorite = cafes.map(cafe => ({
+      ...cafe.toObject(),
+      isFavorite: favoriteCafeIds.includes(cafe._id.toString())
+    }));
+
     return res.status(200).json({
       success: true,
       message: "Search results fetched successfully",
@@ -613,7 +665,7 @@ export const searchCafes = async (req, res) => {
         totalPages: Math.ceil(total / limitNum),
         totalResults: total,
       },
-      result: cafes,
+      result: cafesWithFavorite,
     });
 
   } catch (error) {
@@ -701,12 +753,23 @@ export const mainSearchCafes = async (req, res) => {
       .populate("themeCategoryId", "name image")
       .lean();
 
+    let favoriteCafeIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteCafeIds = watchlist ? watchlist.cafe.map(id => id.toString()) : [];
+    }
+
+    const cafesWithFavorite = cafes.map(cafe => ({
+      ...cafe,
+      isFavorite: favoriteCafeIds.includes(cafe._id.toString())
+    }));
+
     return res.status(200).json({
       success: true,
       message: cafes.length
         ? "Cafés fetched successfully."
         : "No cafés available for selected time and filters.",
-      result: cafes,
+      result: cafesWithFavorite,
     });
   } catch (error) {
     console.error("Error searching cafés:", error);
@@ -773,10 +836,21 @@ export const getCafesByTheme = async (req, res) => {
       status: "active"
     }).select("-__v").populate("themeCategoryId", "name image");
 
+    let favoriteCafeIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteCafeIds = watchlist ? watchlist.cafe.map(id => id.toString()) : [];
+    }
+
+    const cafesWithFavorite = cafes.map(cafe => ({
+      ...cafe.toObject(),
+      isFavorite: favoriteCafeIds.includes(cafe._id.toString())
+    }));
+
     return res.status(200).json({
       success: true,
       count: cafes.length,
-      data: cafes
+      data: cafesWithFavorite
     });
   } catch (error) {
     console.error("Get Cafes by Theme Error:", error);

@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { deleteFromS3, uploadToS3 } from "../middleware/uploadS3.js";
 import eventModel from "../model/event.model.js";
+import watchListModel from "../model/watchlist.model.js";
 import adminModel from "../model/admin.model.js";
 import log from "../utils/logger.js";
 import { sendError, sendSuccess, sendBadRequest } from "../utils/responseUtils.js";
@@ -138,11 +139,23 @@ export const getAllEvents = async (req, res) => {
         .select("-rating -experienceYears -totalFollowers")
         .sort(sort)
         .skip(skip)
-        .limit(parseInt(limit)),
+        .limit(parseInt(limit))
+        .lean(),
       eventModel.countDocuments(filter)
     ]);
 
-    return sendSuccess(res, "Events retrieved successfully", allEvents);
+    let favoriteEventIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteEventIds = watchlist ? watchlist.event.map(id => id.toString()) : [];
+    }
+
+    const eventsWithFavorite = allEvents.map(event => ({
+      ...event,
+      isFavorite: favoriteEventIds.includes(event._id.toString())
+    }));
+
+    return sendSuccess(res, "Events retrieved successfully", eventsWithFavorite);
   } catch (error) {
     log.error(`Error While Getting Events: ${error.message}`);
     return sendError(res, "Error While Getting Events", error);
@@ -160,8 +173,20 @@ export const searchEvents = async (req, res) => {
         { eventName: { $regex: q.trim(), $options: "i" } },
         { addresss: { $regex: q.trim(), $options: "i" } }
       ]
-    })
-    return sendSuccess(res, "Search results retrieved successfully", events);
+    }).lean();
+
+    let favoriteEventIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteEventIds = watchlist ? watchlist.event.map(id => id.toString()) : [];
+    }
+
+    const eventsWithFavorite = events.map(event => ({
+      ...event,
+      isFavorite: favoriteEventIds.includes(event._id.toString())
+    }));
+
+    return sendSuccess(res, "Search results retrieved successfully", eventsWithFavorite);
   } catch (error) {
     log.error(`Error While Searching Events: ${error.message}`);
     return sendError(res, "Error While Searching Events", error);
@@ -194,9 +219,21 @@ export const filterEvents = async (req, res) => {
       .select("-rating -experienceYears -totalFollowers")
       .sort(sort)
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .lean();
 
-    return sendSuccess(res, "Filtered events retrieved successfully", events);
+    let favoriteEventIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteEventIds = watchlist ? watchlist.event.map(id => id.toString()) : [];
+    }
+
+    const eventsWithFavorite = events.map(event => ({
+      ...event,
+      isFavorite: favoriteEventIds.includes(event._id.toString())
+    }));
+
+    return sendSuccess(res, "Filtered events retrieved successfully", eventsWithFavorite);
   } catch (error) {
     log.error(`Error While Filtering Events: ${error.message}`);
     return sendError(res, "Error While Filtering Events", error);
@@ -213,14 +250,20 @@ export const getEventById = async (req, res) => {
       return sendError(res, "Invalid event ID", 400);
     }
 
-    const event = await eventModel.findById(id);
+    const event = await eventModel.findById(id).lean();
 
     if (!event) {
       return sendError(res, "Event not found", 404);
     }
 
+    let isFavorite = false;
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      isFavorite = watchlist ? watchlist.event.some(eid => eid.toString() === event._id.toString()) : false;
+    }
+
     log.info(`Event retrieved: ${id}`);
-    return sendSuccess(res, "Event retrieved successfully", event);
+    return sendSuccess(res, "Event retrieved successfully", { ...event, isFavorite });
   } catch (error) {
     log.error(`Error While Getting Event: ${error.message}`);
     return sendError(res, "Error While Getting Event", error);

@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { deleteFromS3, resizeImage, uploadToS3 } from "../middleware/uploadS3.js";
 import restroModel from "../model/restro.model.js";
+import watchListModel from "../model/watchlist.model.js";
 import adminModel from "../model/admin.model.js";
 import { sendBadRequest, sendCreated, sendError, sendNotFound, sendSuccess } from "../utils/responseUtils.js";
 import log from "../utils/logger.js";
@@ -205,8 +206,20 @@ export const getAllRestos = async (req, res) => {
   try {
     const adminId = req.admin?._id;
     const filter = adminId ? { ownerId: adminId } : {};
-    const restros = await restroModel.find(filter).sort({ createdAt: -1 });
-    return sendSuccess(res, "Restaurants fetched successfully", restros);
+    const restros = await restroModel.find(filter).sort({ createdAt: -1 }).lean();
+
+    let favoriteRestroIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteRestroIds = watchlist ? watchlist.restro.map(id => id.toString()) : [];
+    }
+
+    const restrosWithFavorite = restros.map(restro => ({
+      ...restro,
+      isFavorite: favoriteRestroIds.includes(restro._id.toString())
+    }));
+
+    return sendSuccess(res, "Restaurants fetched successfully", restrosWithFavorite);
   } catch (error) {
     return sendError(res, "Server Error", error);
   }
@@ -216,9 +229,16 @@ export const getSingleRestro = async (req, res) => {
   try {
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ success: false, message: "Invalid restaurant ID" });
-    const restro = await restroModel.findById(id).populate("ownerId", "name email").populate("themeCategoryId");
+    const restro = await restroModel.findById(id).populate("ownerId", "name email").populate("themeCategoryId").lean();
     if (!restro) return res.status(404).json({ success: false, message: "Restaurant not found" });
-    return res.status(200).json({ success: true, message: "Restaurant fetched successfully", restro });
+
+    let isFavorite = false;
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      isFavorite = watchlist ? watchlist.restro.some(rid => rid.toString() === restro._id.toString()) : false;
+    }
+
+    return res.status(200).json({ success: true, message: "Restaurant fetched successfully", restro: { ...restro, isFavorite } });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Server Error", error: error.message });
   }
@@ -261,8 +281,20 @@ export const searchRestaurants = async (req, res) => {
       ];
     }
     if (city) query.city = { $regex: city, $options: "i" };
-    const results = await restroModel.find(query);
-    return sendSuccess(res, "Restaurants fetched successfully", results);
+    const results = await restroModel.find(query).lean();
+
+    let favoriteRestroIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteRestroIds = watchlist ? watchlist.restro.map(id => id.toString()) : [];
+    }
+
+    const resultsWithFavorite = results.map(restro => ({
+      ...restro,
+      isFavorite: favoriteRestroIds.includes(restro._id.toString())
+    }));
+
+    return sendSuccess(res, "Restaurants fetched successfully", resultsWithFavorite);
   } catch (error) {
     return sendError(res, "Server Error", error);
   }
@@ -291,8 +323,20 @@ export const filterRestaurants = async (req, res) => {
       if (maxPrice) query.discountPrice.$lte = parseFloat(maxPrice);
     }
     if (rating) query.averageRating = { $gte: parseFloat(rating) };
-    const restros = await restroModel.find(query);
-    return sendSuccess(res, "Restaurants fetched successfully", restros);
+    const restros = await restroModel.find(query).lean();
+
+    let favoriteRestroIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteRestroIds = watchlist ? watchlist.restro.map(id => id.toString()) : [];
+    }
+
+    const restrosWithFavorite = restros.map(restro => ({
+      ...restro,
+      isFavorite: favoriteRestroIds.includes(restro._id.toString())
+    }));
+
+    return sendSuccess(res, "Restaurants fetched successfully", restrosWithFavorite);
   } catch (error) {
     return sendError(res, "Server Error", error);
   }
@@ -353,10 +397,22 @@ export const getRestrosByTheme = async (req, res) => {
     })
       .select("-__v")
       .populate("themeCategoryId", "name image")
-      .populate("ownerId", "name email");
+      .populate("ownerId", "name email")
+      .lean();
+
+    let favoriteRestroIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteRestroIds = watchlist ? watchlist.restro.map(id => id.toString()) : [];
+    }
+
+    const restrosWithFavorite = restros.map(restro => ({
+      ...restro,
+      isFavorite: favoriteRestroIds.includes(restro._id.toString())
+    }));
 
     return sendSuccess(res, "Restaurants fetched by theme successfully", {
-      restros,
+      restros: restrosWithFavorite,
       total: restros.length
     });
   } catch (error) {
@@ -407,7 +463,18 @@ export const getPopularRestros = async (req, res) => {
         .lean();
     }
 
-    return sendSuccess(res, "Popular restaurants fetched successfully", results);
+    let favoriteRestroIds = [];
+    if (req.user?._id) {
+      const watchlist = await watchListModel.findOne({ userId: req.user._id });
+      favoriteRestroIds = watchlist ? watchlist.restro.map(id => id.toString()) : [];
+    }
+
+    const resultsWithFavorite = results.map(restro => ({
+      ...restro,
+      isFavorite: favoriteRestroIds.includes(restro._id?.toString() || restro._id?.toString())
+    }));
+
+    return sendSuccess(res, "Popular restaurants fetched successfully", resultsWithFavorite);
   } catch (error) {
     log.error("Get Popular Restros Error: " + error.message);
     return sendError(res, "Internal Server Error", error);
