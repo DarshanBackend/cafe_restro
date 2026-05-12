@@ -2,6 +2,65 @@ import watchListModel from "../model/watchlist.model.js";
 import log from "../utils/logger.js"
 import { sendError, sendSuccess } from "../utils/responseUtils.js";
 
+const formatWatchlistResponse = (watchlist) => {
+  const formatItem = (item, type) => {
+    if (!item) return null;
+
+    let formatted = {
+      _id: item._id,
+      name: item.name || item.eventName || item.title || "",
+      image: item.images?.[0] || item.image || item.eventImage || "",
+      rating: item.averageRating || item.rating || 0,
+      price: 0,
+      currency: "INR",
+      location: ""
+    };
+
+    if (type === "hotel") {
+      formatted.location = item.address?.city || "";
+      formatted.price = item.discountPrice || item.actualPrice || 0;
+      formatted.priceLabel = "/night";
+    } else if (type === "cafe") {
+      formatted.location = item.location?.city || "";
+      formatted.price = item.pricing?.discountPrice || item.pricing?.actualPrice || 0;
+      formatted.priceLabel = "/hr";
+    } else if (type === "restro") {
+      formatted.location = item.city || "";
+      formatted.price = item.discountPrice || item.actualPrice || 0;
+      formatted.priceLabel = "/hr";
+    } else if (type === "hall") {
+      formatted.location = item.location || item.address || "";
+      formatted.price = item.discountPrice || item.actualPrice || 0;
+      formatted.priceLabel = "/event";
+    } else if (type === "event") {
+      formatted.location = item.addresss || item.location || "";
+      formatted.price = item.price || 0;
+      formatted.priceLabel = "/ticket";
+    }
+
+    return formatted;
+  };
+
+  const result = {
+    hotel: (watchlist.hotels || []).map(h => formatItem(h, "hotel")).filter(Boolean),
+    cafe: (watchlist.cafe || []).map(c => formatItem(c, "cafe")).filter(Boolean),
+    restaurant: (watchlist.restro || []).map(r => formatItem(r, "restro")).filter(Boolean),
+    hall: (watchlist.hall || []).map(h => formatItem(h, "hall")).filter(Boolean),
+    event: (watchlist.event || []).map(e => formatItem(e, "event")).filter(Boolean)
+  };
+
+  const summary = {
+    hotel: result.hotel.length,
+    cafe: result.cafe.length,
+    restaurant: result.restaurant.length,
+    hall: result.hall.length,
+    event: result.event.length,
+    total: result.hotel.length + result.cafe.length + result.restaurant.length + result.hall.length + result.event.length
+  };
+
+  return { summary, result };
+};
+
 export const addToWatchlist = async (req, res) => {
   try {
     const { hotel, cafe, restro, hall, event } = req.query;
@@ -27,7 +86,14 @@ export const addToWatchlist = async (req, res) => {
       { new: true, upsert: true }
     ).populate("hotels cafe restro hall event");
 
-    return sendSuccess(res, "Watchlist updated successfully", watchlist);
+    const { summary, result } = formatWatchlistResponse(watchlist);
+
+    return res.status(200).json({
+      success: true,
+      message: "Watchlist updated successfully",
+      summary,
+      result
+    });
   } catch (error) {
     log.error(error.message);
     return sendError(res, 500, "Failed to add to watchlist", error);
@@ -54,62 +120,7 @@ export const getMyWatchlist = async (req, res) => {
       });
     }
 
-    const formatItem = (item, type) => {
-      if (!item) return null;
-      
-      let formatted = {
-        _id: item._id,
-        name: item.name || item.eventName || item.title || "",
-        image: item.images?.[0] || item.image || item.eventImage || "",
-        rating: item.averageRating || item.rating || 0,
-        price: 0,
-        currency: "INR",
-        location: ""
-      };
-
-      
-      if (type === "hotel") {
-        formatted.location = item.address?.city || "";
-        formatted.price = item.discountPrice || item.actualPrice || 0;
-        formatted.priceLabel = "/night";
-      } else if (type === "cafe") {
-        formatted.location = item.location?.city || "";
-        formatted.price = item.pricing?.discountPrice || item.pricing?.actualPrice || 0;
-        formatted.priceLabel = "/hr";
-      } else if (type === "restro") {
-        formatted.location = item.city || "";
-        formatted.price = item.discountPrice || item.actualPrice || 0;
-        formatted.priceLabel = "/hr";
-      } else if (type === "hall") {
-        formatted.location = item.location || item.address || "";
-        formatted.price = item.discountPrice || item.actualPrice || 0;
-        formatted.priceLabel = "/event";
-      } else if (type === "event") {
-        formatted.location = item.addresss || item.location || "";
-        formatted.price = item.price || 0;
-        formatted.priceLabel = "/ticket";
-      }
-
-      return formatted;
-    };
-
-    const result = {
-      hotel: (watchlist.hotels || []).map(h => formatItem(h, "hotel")).filter(Boolean),
-      cafe: (watchlist.cafe || []).map(c => formatItem(c, "cafe")).filter(Boolean),
-      restaurant: (watchlist.restro || []).map(r => formatItem(r, "restro")).filter(Boolean),
-      hall: (watchlist.hall || []).map(h => formatItem(h, "hall")).filter(Boolean),
-      event: (watchlist.event || []).map(e => formatItem(e, "event")).filter(Boolean)
-    };
-
-    
-    const summary = {
-      hotel: result.hotel.length,
-      cafe: result.cafe.length,
-      restaurant: result.restaurant.length,
-      hall: result.hall.length,
-      event: result.event.length,
-      total: result.hotel.length + result.cafe.length + result.restaurant.length + result.hall.length + result.event.length
-    };
+    const { summary, result } = formatWatchlistResponse(watchlist);
 
     return res.status(200).json({
       success: true,
@@ -159,7 +170,14 @@ export const removeWatchlistItem = async (req, res) => {
       });
     }
 
-    return sendSuccess(res, "Item(s) removed from watchlist successfully", watchlist);
+    const { summary, result } = formatWatchlistResponse(watchlist);
+
+    return res.status(200).json({
+      success: true,
+      message: "Item(s) removed from watchlist successfully",
+      summary,
+      result
+    });
   } catch (error) {
     log.error(error.message);
     return sendError(res, 500, "Failed to remove item from watchlist", error);
