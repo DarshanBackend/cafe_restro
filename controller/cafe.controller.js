@@ -273,14 +273,34 @@ export const getAllCafes = async (req, res) => {
       favoriteCafeIds = watchlist ? watchlist.cafe.map(id => id.toString()) : [];
     }
 
-    const cafesWithFavorite = cafes.map(cafe => ({
-      ...cafe.toObject(),
-      isFavorite: favoriteCafeIds.includes(cafe._id.toString())
+    const reviewModel = mongoose.model("Review");
+    const cafesWithStats = await Promise.all(cafes.map(async (cafe) => {
+      const cafeObj = cafe.toObject();
+      const latestReviews = await reviewModel.find({ 
+        businessId: cafe._id, 
+        businessType: 'Cafes', 
+        isActive: true 
+      })
+      .populate('userId', 'name avatar profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(2)
+      .lean();
+
+      return {
+        ...cafeObj,
+        isFavorite: favoriteCafeIds.includes(cafe._id.toString()),
+        averageRating: cafe.averageRating || 0,
+        reviewCount: cafe.reviewCount || 0,
+        reviews: latestReviews.map(r => ({
+          ...r,
+          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
+        }))
+      };
     }));
 
     return res.status(200).json({
       success: true,
-      data: cafesWithFavorite,
+      data: cafesWithStats,
       pagination: {
         current: pageNumber,
         totalPages: Math.ceil(total / pageSize),
@@ -325,6 +345,36 @@ export const getCafeById = async (req, res) => {
 
     const isOpen = cafe.isOpenNow();
 
+    // Fetch reviews from centralized Review model
+    const reviewModel = mongoose.model("Review");
+    const reviews = await reviewModel.find({ businessId: id, businessType: 'Cafes', isActive: true })
+      .populate('userId', 'name avatar profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+
+    const stats = await reviewModel.aggregate([
+      { $match: { businessId: new mongoose.Types.ObjectId(id), businessType: 'Cafes', isActive: true } },
+      {
+        $group: {
+          _id: "$rating",
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let totalCount = 0;
+    let sumRating = 0;
+
+    stats.forEach(s => {
+      distribution[s._id] = s.count;
+      totalCount += s.count;
+      sumRating += (s._id * s.count);
+    });
+
+    const averageRating = totalCount > 0 ? Number((sumRating / totalCount).toFixed(1)) : 0;
+
     let isFavorite = false;
     if (req.user?._id) {
       const watchlist = await watchListModel.findOne({ userId: req.user._id });
@@ -336,7 +386,18 @@ export const getCafeById = async (req, res) => {
       data: {
         ...cafe.toObject(),
         isOpen,
-        isFavorite
+        isFavorite,
+        averageRating,
+        reviewCount: totalCount,
+        reviews: reviews.map(r => ({
+          ...r,
+          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
+        })),
+        reviewSummary: {
+          average: averageRating,
+          totalReviews: totalCount,
+          distribution
+        }
       }
     });
 

@@ -14,7 +14,8 @@ const BUSINESS_TYPES = {
   RESTRO: { type: "Restro", model: restroModel },
   EVENT: { type: "Event", model: eventModel },
   HALL: { type: "Hall", model: hallModel },
-  STAY: { type: "Stay", model: stayModel }
+  STAY: { type: "Stay", model: stayModel },
+  TOUR: { type: "Tour", model: tourModel }
 };
 
 const mediaSchema = new mongoose.Schema({

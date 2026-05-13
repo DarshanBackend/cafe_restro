@@ -136,7 +136,7 @@ export const getAllEvents = async (req, res) => {
 
     const [allEvents, totalCount] = await Promise.all([
       eventModel.find(filter)
-        .select("-rating -experienceYears -totalFollowers")
+        .select("-experienceYears -totalFollowers")
         .sort(sort)
         .skip(skip)
         .limit(parseInt(limit))
@@ -150,12 +150,31 @@ export const getAllEvents = async (req, res) => {
       favoriteEventIds = watchlist ? watchlist.event.map(id => id.toString()) : [];
     }
 
-    const eventsWithFavorite = allEvents.map(event => ({
-      ...event,
-      isFavorite: favoriteEventIds.includes(event._id.toString())
+    const reviewModel = mongoose.model("Review");
+    const eventsWithStats = await Promise.all(allEvents.map(async (event) => {
+      const latestReviews = await reviewModel.find({ 
+        businessId: event._id, 
+        businessType: 'Event', 
+        isActive: true 
+      })
+      .populate('userId', 'name avatar profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(2)
+      .lean();
+
+      return {
+        ...event,
+        isFavorite: favoriteEventIds.includes(event._id.toString()),
+        averageRating: event.averageRating || 0,
+        reviewCount: event.reviewCount || 0,
+        reviews: latestReviews.map(r => ({
+          ...r,
+          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
+        }))
+      };
     }));
 
-    return sendSuccess(res, "Events retrieved successfully", eventsWithFavorite);
+    return sendSuccess(res, "Events retrieved successfully", eventsWithStats);
   } catch (error) {
     log.error(`Error While Getting Events: ${error.message}`);
     return sendError(res, "Error While Getting Events", error);
@@ -183,7 +202,9 @@ export const searchEvents = async (req, res) => {
 
     const eventsWithFavorite = events.map(event => ({
       ...event,
-      isFavorite: favoriteEventIds.includes(event._id.toString())
+      isFavorite: favoriteEventIds.includes(event._id.toString()),
+      averageRating: event.averageRating || 0,
+      reviewCount: event.reviewCount || 0
     }));
 
     return sendSuccess(res, "Search results retrieved successfully", eventsWithFavorite);
@@ -216,7 +237,7 @@ export const filterEvents = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const events = await eventModel.find(filter)
-      .select("-rating -experienceYears -totalFollowers")
+      .select("-experienceYears -totalFollowers")
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit))
@@ -251,10 +272,37 @@ export const getEventById = async (req, res) => {
     }
 
     const event = await eventModel.findById(id).lean();
+    if (!event) return sendError(res, "Event not found", 404);
 
-    if (!event) {
-      return sendError(res, "Event not found", 404);
-    }
+    // Fetch reviews from centralized Review model
+    const reviewModel = mongoose.model("Review");
+    const reviews = await reviewModel.find({ businessId: id, businessType: 'Event', isActive: true })
+      .populate('userId', 'name avatar profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+
+    const stats = await reviewModel.aggregate([
+      { $match: { businessId: new mongoose.Types.ObjectId(id), businessType: 'Event', isActive: true } },
+      {
+        $group: {
+          _id: "$rating",
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let totalCount = 0;
+    let sumRating = 0;
+
+    stats.forEach(s => {
+      distribution[s._id] = s.count;
+      totalCount += s.count;
+      sumRating += (s._id * s.count);
+    });
+
+    const averageRating = totalCount > 0 ? Number((sumRating / totalCount).toFixed(1)) : 0;
 
     let isFavorite = false;
     if (req.user?._id) {
@@ -262,8 +310,24 @@ export const getEventById = async (req, res) => {
       isFavorite = watchlist ? watchlist.event.some(eid => eid.toString() === event._id.toString()) : false;
     }
 
+    const result = {
+      ...event,
+      isFavorite,
+      averageRating,
+      reviewCount: totalCount,
+      reviews: reviews.map(r => ({
+        ...r,
+        ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
+      })),
+      reviewSummary: {
+        average: averageRating,
+        totalReviews: totalCount,
+        distribution
+      }
+    };
+
     log.info(`Event retrieved: ${id}`);
-    return sendSuccess(res, "Event retrieved successfully", { ...event, isFavorite });
+    return sendSuccess(res, "Event retrieved successfully", result);
   } catch (error) {
     log.error(`Error While Getting Event: ${error.message}`);
     return sendError(res, "Error While Getting Event", error);

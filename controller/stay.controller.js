@@ -206,8 +206,30 @@ export const getAllStays = async (req, res) => {
       if (maxPrice) filter.actualPrice.$lte = Number(maxPrice);
     }
 
-    const stays = await stayModel.find(filter).sort({ createdAt: -1 });
-    return sendSuccess(res, "Stays fetched successfully", stays);
+    const reviewModel = mongoose.model("Review");
+    const staysWithStats = await Promise.all(stays.map(async (stay) => {
+      const latestReviews = await reviewModel.find({ 
+        businessId: stay._id, 
+        businessType: 'Stay', 
+        isActive: true 
+      })
+      .populate('userId', 'name avatar profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(2)
+      .lean();
+
+      return {
+        ...stay,
+        averageRating: stay.averageRating || 0,
+        reviewCount: stay.reviewCount || 0,
+        reviews: latestReviews.map(r => ({
+          ...r,
+          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
+        }))
+      };
+    }));
+
+    return sendSuccess(res, "Stays fetched successfully", staysWithStats);
   } catch (err) {
     console.error("getAllStays error:", err);
     return sendError(res, "Failed to fetch stays", err);
@@ -223,10 +245,55 @@ export const getStayById = async (req, res) => {
       return sendBadRequest(res, "Invalid stay ID");
     }
 
-    const stay = await stayModel.findOne({ _id: id, isActive: true });
+    const stay = await stayModel.findOne({ _id: id, isActive: true }).lean();
     if (!stay) return sendNotFound(res, "Stay not found");
 
-    return sendSuccess(res, "Stay fetched successfully", [stay]);
+    // Fetch reviews from centralized Review model
+    const reviewModel = mongoose.model("Review");
+    const reviews = await reviewModel.find({ businessId: id, businessType: 'Stay', isActive: true })
+      .populate('userId', 'name avatar profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+
+    const stats = await reviewModel.aggregate([
+      { $match: { businessId: new mongoose.Types.ObjectId(id), businessType: 'Stay', isActive: true } },
+      {
+        $group: {
+          _id: "$rating",
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let totalCount = 0;
+    let sumRating = 0;
+
+    stats.forEach(s => {
+      distribution[s._id] = s.count;
+      totalCount += s.count;
+      sumRating += (s._id * s.count);
+    });
+
+    const averageRating = totalCount > 0 ? Number((sumRating / totalCount).toFixed(1)) : 0;
+
+    const result = {
+      ...stay,
+      averageRating,
+      reviewCount: totalCount,
+      reviews: reviews.map(r => ({
+        ...r,
+        ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
+      })),
+      reviewSummary: {
+        average: averageRating,
+        totalReviews: totalCount,
+        distribution
+      }
+    };
+
+    return sendSuccess(res, "Stay fetched successfully", [result]);
   } catch (err) {
     console.error("getStayById error:", err);
     return sendError(res, "Failed to fetch stay", err);

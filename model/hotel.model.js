@@ -49,7 +49,7 @@ const hotelSchema = new mongoose.Schema(
       helpSupport: { type: String, default: null }
     },
     averageRating: { type: Number, default: 0 },
-    reviews: [reviewSchema],
+    reviewCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

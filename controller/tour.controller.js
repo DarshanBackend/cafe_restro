@@ -97,10 +97,30 @@ export const getAllTours = async (req, res) => {
     const sortConfig = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const tours = await tourModel.find(filter).sort(sortConfig).skip(skip).limit(parseInt(limit));
-    const totalTours = await tourModel.countDocuments(filter);
+    const reviewModel = mongoose.model("Review");
+    const toursWithStats = await Promise.all(tours.map(async (tour) => {
+      const latestReviews = await reviewModel.find({ 
+        businessId: tour._id, 
+        businessType: 'Tour', 
+        isActive: true 
+      })
+      .populate('userId', 'name avatar profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(2)
+      .lean();
 
-    return sendSuccess(res, "Tours fetched successfully", tours);
+      return {
+        ...tour,
+        averageRating: tour.averageRating || 0,
+        reviewCount: tour.reviewCount || 0,
+        reviews: latestReviews.map(r => ({
+          ...r,
+          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
+        }))
+      };
+    }));
+
+    return sendSuccess(res, "Tours fetched successfully", toursWithStats);
   } catch (error) {
     return sendError(res, "Error fetching tours", error);
   }
@@ -111,10 +131,55 @@ export const getTourById = async (req, res) => {
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) return sendBadRequest(res, "Invalid Tour ID");
 
-    const tour = await tourModel.findById(id);
+    const tour = await tourModel.findById(id).lean();
     if (!tour) return sendNotFound(res, "Tour not found");
 
-    return sendSuccess(res, "Tour fetched successfully", tour);
+    // Fetch reviews from centralized Review model
+    const reviewModel = mongoose.model("Review");
+    const reviews = await reviewModel.find({ businessId: id, businessType: 'Tour', isActive: true })
+      .populate('userId', 'name avatar profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+
+    const stats = await reviewModel.aggregate([
+      { $match: { businessId: new mongoose.Types.ObjectId(id), businessType: 'Tour', isActive: true } },
+      {
+        $group: {
+          _id: "$rating",
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let totalCount = 0;
+    let sumRating = 0;
+
+    stats.forEach(s => {
+      distribution[s._id] = s.count;
+      totalCount += s.count;
+      sumRating += (s._id * s.count);
+    });
+
+    const averageRating = totalCount > 0 ? Number((sumRating / totalCount).toFixed(1)) : 0;
+
+    const result = {
+      ...tour,
+      averageRating,
+      reviewCount: totalCount,
+      reviews: reviews.map(r => ({
+        ...r,
+        ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
+      })),
+      reviewSummary: {
+        average: averageRating,
+        totalReviews: totalCount,
+        distribution
+      }
+    };
+
+    return sendSuccess(res, "Tour fetched successfully", result);
   } catch (error) {
     return sendError(res, "Error fetching tour", error);
   }

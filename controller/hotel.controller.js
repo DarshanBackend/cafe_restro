@@ -91,12 +91,31 @@ export const getAllHotels = async (req, res) => {
       favoriteHotelIds = watchlist ? watchlist.hotels.map(id => id.toString()) : [];
     }
 
-    const hotelsWithFavorite = hotels.map(hotel => ({
-      ...hotel,
-      isFavorite: favoriteHotelIds.includes(hotel._id.toString())
+    const reviewModel = mongoose.model("Review");
+    const hotelsWithStats = await Promise.all(hotels.map(async (hotel) => {
+      const latestReviews = await reviewModel.find({ 
+        businessId: hotel._id, 
+        businessType: 'Hotel', 
+        isActive: true 
+      })
+      .populate('userId', 'name avatar profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(2)
+      .lean();
+
+      return {
+        ...hotel,
+        isFavorite: favoriteHotelIds.includes(hotel._id.toString()),
+        averageRating: hotel.averageRating || 0,
+        reviewCount: hotel.reviewCount || 0,
+        reviews: latestReviews.map(r => ({
+          ...r,
+          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
+        }))
+      };
     }));
 
-    return sendSuccess(res, "Hotels fetched successfully", hotelsWithFavorite);
+    return sendSuccess(res, "Hotels fetched successfully", hotelsWithStats);
 
   } catch (error) {
     log.error(error);
@@ -112,10 +131,38 @@ export const getHotelById = async (req, res) => {
       return sendBadRequest(res, "Invalid Hotel ID");
     }
 
-    if (!hotelId) return sendError(res, 400, "Hotel ID is required");
-
     const hotel = await hotelModel.findById(hotelId).populate('adminId').lean();
     if (!hotel) return sendError(res, 404, "Hotel not found");
+
+    // Fetch reviews from centralized Review model
+    const reviewModel = mongoose.model("Review");
+    const reviews = await reviewModel.find({ businessId: hotelId, businessType: 'Hotel', isActive: true })
+      .populate('userId', 'name avatar profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+
+    const stats = await reviewModel.aggregate([
+      { $match: { businessId: new mongoose.Types.ObjectId(hotelId), businessType: 'Hotel', isActive: true } },
+      {
+        $group: {
+          _id: "$rating",
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let totalCount = 0;
+    let sumRating = 0;
+
+    stats.forEach(s => {
+      distribution[s._id] = s.count;
+      totalCount += s.count;
+      sumRating += (s._id * s.count);
+    });
+
+    const averageRating = totalCount > 0 ? Number((sumRating / totalCount).toFixed(1)) : 0;
 
     let isFavorite = false;
     if (req.user?._id) {
@@ -123,7 +170,23 @@ export const getHotelById = async (req, res) => {
       isFavorite = watchlist ? watchlist.hotels.some(id => id.toString() === hotel._id.toString()) : false;
     }
 
-    return sendSuccess(res, "Hotel fetched successfully", { ...hotel, isFavorite });
+    const result = {
+      ...hotel,
+      isFavorite,
+      averageRating,
+      reviewCount: totalCount,
+      reviews: reviews.map(r => ({
+        ...r,
+        ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
+      })),
+      reviewSummary: {
+        average: averageRating,
+        totalReviews: totalCount,
+        distribution
+      }
+    };
+
+    return sendSuccess(res, "Hotel fetched successfully", result);
 
   } catch (error) {
     log.error(error);
@@ -261,9 +324,8 @@ export const getHotelByCityName = async (req, res) => {
     
     const hotels = await hotelModel
       .find(filter)
-      .select('name description address images rooms amenities priceRange Rent ourService averageRating reviews')
+      .select('name description address images rooms amenities priceRange Rent ourService averageRating reviewCount')
       .populate('adminId', 'name email contactNo')
-      .populate('reviews.user', 'name avatar')
       .sort(sortOptions)
       .skip(skip)
       .limit(limitNum)
@@ -274,35 +336,54 @@ export const getHotelByCityName = async (req, res) => {
     const totalPages = Math.ceil(totalHotels / limitNum);
 
     
-    const transformedHotels = hotels.map(hotel => ({
-      _id: hotel._id,
-      name: hotel.name,
-      description: hotel.description,
-      address: hotel.address,
-      images: hotel.images || [],
-      amenities: hotel.amenities || [],
-      pricing: {
-        rent: hotel.Rent,
-        priceRange: hotel.priceRange || { min: 0, max: 0 },
-        currency: "INR"
-      },
-      services: hotel.ourService || {},
-      rating: {
-        average: hotel.averageRating || 0,
-        totalReviews: hotel.reviews?.length || 0
-      },
-      rooms: hotel.rooms?.map(room => ({
-        type: room.type,
-        pricePerNight: room.pricePerNight,
-        maxGuests: room.maxGuests,
-        amenities: room.amenities || []
-      })) || [],
-      admin: hotel.adminId ? {
-        _id: hotel.adminId._id,
-        name: hotel.adminId.name,
-        email: hotel.adminId.email,
-        contactNo: hotel.adminId.contactNo
-      } : null
+    const reviewModel = mongoose.model("Review");
+    const transformedHotels = await Promise.all(hotels.map(async (hotel) => {
+      const latestReviews = await reviewModel.find({ 
+        businessId: hotel._id, 
+        businessType: 'Hotel', 
+        isActive: true 
+      })
+      .populate('userId', 'name avatar profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(2)
+      .lean();
+
+      return {
+        _id: hotel._id,
+        name: hotel.name,
+        description: hotel.description,
+        address: hotel.address,
+        images: hotel.images || [],
+        amenities: hotel.amenities || [],
+        pricing: {
+          rent: hotel.Rent,
+          priceRange: hotel.priceRange || { min: 0, max: 0 },
+          currency: "INR"
+        },
+        services: hotel.ourService || {},
+        rating: {
+          average: hotel.averageRating || 0,
+          totalReviews: hotel.reviewCount || 0
+        },
+        reviewCount: hotel.reviewCount || 0,
+        averageRating: hotel.averageRating || 0,
+        reviews: latestReviews.map(r => ({
+          ...r,
+          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
+        })),
+        rooms: hotel.rooms?.map(room => ({
+          type: room.type,
+          pricePerNight: room.pricePerNight,
+          maxGuests: room.maxGuests,
+          amenities: room.amenities || []
+        })) || [],
+        admin: hotel.adminId ? {
+          _id: hotel.adminId._id,
+          name: hotel.adminId.name,
+          email: hotel.adminId.email,
+          contactNo: hotel.adminId.contactNo
+        } : null
+      };
     }));
 
     if (req.user?._id) {
@@ -442,15 +523,34 @@ export const searchHotels = async (req, res) => {
       favoriteHotelIds = watchlist ? watchlist.hotels.map(id => id.toString()) : [];
     }
 
-    const hotelsWithFavorite = hotels.map(hotel => ({
-      ...hotel,
-      isFavorite: favoriteHotelIds.includes(hotel._id.toString())
+    const reviewModel = mongoose.model("Review");
+    const hotelsWithStats = await Promise.all(hotels.map(async (hotel) => {
+      const latestReviews = await reviewModel.find({ 
+        businessId: hotel._id, 
+        businessType: 'Hotel', 
+        isActive: true 
+      })
+      .populate('userId', 'name avatar profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(2)
+      .lean();
+
+      return {
+        ...hotel,
+        isFavorite: favoriteHotelIds.includes(hotel._id.toString()),
+        averageRating: hotel.averageRating || 0,
+        reviewCount: hotel.reviewCount || 0,
+        reviews: latestReviews.map(r => ({
+          ...r,
+          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
+        }))
+      };
     }));
 
     return res.status(200).json({
       success: true,
       message: `${hotels.length} hotels found`,
-      data: hotelsWithFavorite,
+      data: hotelsWithStats,
     });
   } catch (error) {
     console.error(`Error while searching hotels: ${error.message}`);
@@ -502,7 +602,7 @@ export const mainSearchHotels = async (req, res) => {
     };
 
     const hotels = await hotelModel.find(query)
-      .select("name description address images actualPrice discountPrice averageRating amenities")
+      .select("name description address images actualPrice discountPrice averageRating reviewCount amenities")
       .limit(20)
       .lean();
 
@@ -512,9 +612,28 @@ export const mainSearchHotels = async (req, res) => {
       favoriteHotelIds = watchlist ? watchlist.hotels.map(id => id.toString()) : [];
     }
 
-    const hotelsWithFavorite = hotels.map(hotel => ({
-      ...hotel,
-      isFavorite: favoriteHotelIds.includes(hotel._id.toString())
+    const reviewModel = mongoose.model("Review");
+    const hotelsWithStats = await Promise.all(hotels.map(async (hotel) => {
+      const latestReviews = await reviewModel.find({ 
+        businessId: hotel._id, 
+        businessType: 'Hotel', 
+        isActive: true 
+      })
+      .populate('userId', 'name avatar profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(2)
+      .lean();
+
+      return {
+        ...hotel,
+        isFavorite: favoriteHotelIds.includes(hotel._id.toString()),
+        averageRating: hotel.averageRating || 0,
+        reviewCount: hotel.reviewCount || 0,
+        reviews: latestReviews.map(r => ({
+          ...r,
+          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
+        }))
+      };
     }));
 
     return res.status(200).json({
@@ -528,7 +647,7 @@ export const mainSearchHotels = async (req, res) => {
         children: Number(children) || 0,
         rooms: Number(rooms) || 1
       },
-      result: hotelsWithFavorite,
+      result: hotelsWithStats,
     });
   } catch (error) {
     console.error("Hotel Search Error:", error);

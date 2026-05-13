@@ -214,12 +214,31 @@ export const getAllRestos = async (req, res) => {
       favoriteRestroIds = watchlist ? watchlist.restro.map(id => id.toString()) : [];
     }
 
-    const restrosWithFavorite = restros.map(restro => ({
-      ...restro,
-      isFavorite: favoriteRestroIds.includes(restro._id.toString())
+    const reviewModel = mongoose.model("Review");
+    const restrosWithStats = await Promise.all(restros.map(async (restro) => {
+      const latestReviews = await reviewModel.find({ 
+        businessId: restro._id, 
+        businessType: 'Restro', 
+        isActive: true 
+      })
+      .populate('userId', 'name avatar profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(2)
+      .lean();
+
+      return {
+        ...restro,
+        isFavorite: favoriteRestroIds.includes(restro._id.toString()),
+        averageRating: restro.averageRating || 0,
+        reviewCount: restro.reviewCount || 0,
+        reviews: latestReviews.map(r => ({
+          ...r,
+          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
+        }))
+      };
     }));
 
-    return sendSuccess(res, "Restaurants fetched successfully", restrosWithFavorite);
+    return sendSuccess(res, "Restaurants fetched successfully", restrosWithStats);
   } catch (error) {
     return sendError(res, "Server Error", error);
   }
@@ -238,7 +257,53 @@ export const getSingleRestro = async (req, res) => {
       isFavorite = watchlist ? watchlist.restro.some(rid => rid.toString() === restro._id.toString()) : false;
     }
 
-    return res.status(200).json({ success: true, message: "Restaurant fetched successfully", restro: { ...restro, isFavorite } });
+    // Fetch reviews from centralized Review model
+    const reviewModel = mongoose.model("Review");
+    const reviews = await reviewModel.find({ businessId: id, businessType: 'Restro', isActive: true })
+      .populate('userId', 'name avatar profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+
+    const stats = await reviewModel.aggregate([
+      { $match: { businessId: new mongoose.Types.ObjectId(id), businessType: 'Restro', isActive: true } },
+      {
+        $group: {
+          _id: "$rating",
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let totalCount = 0;
+    let sumRating = 0;
+
+    stats.forEach(s => {
+      distribution[s._id] = s.count;
+      totalCount += s.count;
+      sumRating += (s._id * s.count);
+    });
+
+    const averageRating = totalCount > 0 ? Number((sumRating / totalCount).toFixed(1)) : 0;
+
+    const restroData = {
+      ...restro,
+      isFavorite,
+      averageRating,
+      reviewCount: totalCount,
+      reviews: reviews.map(r => ({
+        ...r,
+        ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
+      })),
+      reviewSummary: {
+        average: averageRating,
+        totalReviews: totalCount,
+        distribution
+      }
+    };
+
+    return res.status(200).json({ success: true, message: "Restaurant fetched successfully", restro: restroData });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Server Error", error: error.message });
   }
@@ -282,6 +347,28 @@ export const searchRestaurants = async (req, res) => {
     }
     if (city) query.city = { $regex: city, $options: "i" };
     const results = await restroModel.find(query).lean();
+    const reviewModel = mongoose.model("Review");
+    const resultsWithStats = await Promise.all(results.map(async (restro) => {
+      const latestReviews = await reviewModel.find({ 
+        businessId: restro._id, 
+        businessType: 'Restro', 
+        isActive: true 
+      })
+      .populate('userId', 'name avatar profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(2)
+      .lean();
+
+      return {
+        ...restro,
+        averageRating: restro.averageRating || 0,
+        reviewCount: restro.reviewCount || 0,
+        reviews: latestReviews.map(r => ({
+          ...r,
+          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
+        }))
+      };
+    }));
 
     let favoriteRestroIds = [];
     if (req.user?._id) {
@@ -289,12 +376,11 @@ export const searchRestaurants = async (req, res) => {
       favoriteRestroIds = watchlist ? watchlist.restro.map(id => id.toString()) : [];
     }
 
-    const resultsWithFavorite = results.map(restro => ({
+    const restaurantsWithFavorite = resultsWithStats.map(restro => ({
       ...restro,
       isFavorite: favoriteRestroIds.includes(restro._id.toString())
     }));
-
-    return sendSuccess(res, "Restaurants fetched successfully", resultsWithFavorite);
+    return sendSuccess(res, "Search results fetched successfully", restaurantsWithFavorite);
   } catch (error) {
     return sendError(res, "Server Error", error);
   }
