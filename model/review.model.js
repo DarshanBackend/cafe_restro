@@ -73,6 +73,28 @@ const reviewSchema = new mongoose.Schema(
   }
 );
 
+// Virtual for rating text
+reviewSchema.virtual('ratingText').get(function () {
+  switch (this.rating) {
+    case 1: return "Terrible";
+    case 2: return "Bad";
+    case 3: return "Okay";
+    case 4: return "Good";
+    case 5: return "Great";
+    default: return "No Rating";
+  }
+});
+
+// Virtuals for likes and dislikes count
+reviewSchema.virtual('likesCount').get(function () {
+  return this.likes ? this.likes.length : 0;
+});
+
+reviewSchema.virtual('dislikesCount').get(function () {
+  return this.dislikes ? this.dislikes.length : 0;
+});
+
+
 // Virtual populate for user details
 reviewSchema.virtual('user', {
   ref: 'User',

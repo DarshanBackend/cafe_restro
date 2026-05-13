@@ -8,6 +8,7 @@ import { sendBadRequest, sendError, sendNotFound, sendSuccess } from "../utils/r
 import log from "../utils/logger.js";
 import reviewModel from "../model/review.model.js";
 import coupanModel from "../model/coupan.model.js";
+import { formatReviewsResponse } from "../utils/reviewUtils.js";
 
 export const createHall = async (req, res) => {
   try {
@@ -232,10 +233,7 @@ export const getHallById = async (req, res) => {
       },
       isAvailable: hall.isAvailable,
       admin: hall.adminId,
-      reviews: reviews.map(r => ({
-        ...r,
-        ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
-      })),
+      reviews: formatReviewsResponse(reviews, req.user?._id),
       reviewSummary: {
         average: averageRating,
         totalReviews: totalCount,

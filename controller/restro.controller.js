@@ -8,6 +8,7 @@ import log from "../utils/logger.js";
 import { sendNotification } from "../utils/notification.utils.js";
 import themeCategoryModel from "../model/themeCategory.model.js";
 import restaurantBookingModel from "../model/restro.booking.model.js";
+import { formatReviewsResponse } from "../utils/reviewUtils.js";
 
 const getS3Key = (url) => {
   if (!url || typeof url !== "string") return null;
@@ -231,10 +232,7 @@ export const getAllRestos = async (req, res) => {
         isFavorite: favoriteRestroIds.includes(restro._id.toString()),
         averageRating: restro.averageRating || 0,
         reviewCount: restro.reviewCount || 0,
-        reviews: latestReviews.map(r => ({
-          ...r,
-          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
-        }))
+        reviews: formatReviewsResponse(latestReviews, req.user?._id)
       };
     }));
 
@@ -292,10 +290,7 @@ export const getSingleRestro = async (req, res) => {
       isFavorite,
       averageRating,
       reviewCount: totalCount,
-      reviews: reviews.map(r => ({
-        ...r,
-        ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
-      })),
+      reviews: formatReviewsResponse(reviews, req.user?._id),
       reviewSummary: {
         average: averageRating,
         totalReviews: totalCount,
@@ -363,10 +358,7 @@ export const searchRestaurants = async (req, res) => {
         ...restro,
         averageRating: restro.averageRating || 0,
         reviewCount: restro.reviewCount || 0,
-        reviews: latestReviews.map(r => ({
-          ...r,
-          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
-        }))
+        reviews: formatReviewsResponse(latestReviews, req.user?._id)
       };
     }));
 

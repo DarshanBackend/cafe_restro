@@ -7,6 +7,7 @@ import { sendNotification } from "../utils/notification.utils.js";
 import log from "../utils/logger.js";
 import { sendNotFound } from '../utils/responseUtils.js'
 import cafeBookingModel from "../model/cafe.booking.model.js";
+import { formatReviewsResponse } from "../utils/reviewUtils.js";
 
 export const createNewCafe = async (req, res) => {
   try {
@@ -291,10 +292,7 @@ export const getAllCafes = async (req, res) => {
         isFavorite: favoriteCafeIds.includes(cafe._id.toString()),
         averageRating: cafe.averageRating || 0,
         reviewCount: cafe.reviewCount || 0,
-        reviews: latestReviews.map(r => ({
-          ...r,
-          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
-        }))
+        reviews: formatReviewsResponse(latestReviews, req.user?._id)
       };
     }));
 
@@ -389,10 +387,7 @@ export const getCafeById = async (req, res) => {
         isFavorite,
         averageRating,
         reviewCount: totalCount,
-        reviews: reviews.map(r => ({
-          ...r,
-          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
-        })),
+        reviews: formatReviewsResponse(reviews, req.user?._id),
         reviewSummary: {
           average: averageRating,
           totalReviews: totalCount,

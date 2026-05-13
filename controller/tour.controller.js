@@ -3,6 +3,7 @@ import adminModel from "../model/admin.model.js";
 import { upload, uploadToS3, resizeImage, deleteFromS3 } from "../middleware/uploadS3.js";
 import mongoose from "mongoose";
 import { sendBadRequest, sendSuccess, sendError, sendNotFound } from "../utils/responseUtils.js";
+import { formatReviewsResponse } from "../utils/reviewUtils.js";
 import log from "../utils/logger.js";
 
 export const uploadTourImage = upload.single('tourImage');
@@ -97,6 +98,8 @@ export const getAllTours = async (req, res) => {
     const sortConfig = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
+    const tours = await tourModel.find(filter).sort(sortConfig).skip(skip).limit(parseInt(limit)).lean();
+
     const reviewModel = mongoose.model("Review");
     const toursWithStats = await Promise.all(tours.map(async (tour) => {
       const latestReviews = await reviewModel.find({ 
@@ -113,10 +116,7 @@ export const getAllTours = async (req, res) => {
         ...tour,
         averageRating: tour.averageRating || 0,
         reviewCount: tour.reviewCount || 0,
-        reviews: latestReviews.map(r => ({
-          ...r,
-          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
-        }))
+        reviews: formatReviewsResponse(latestReviews, req.user?._id)
       };
     }));
 
@@ -168,10 +168,7 @@ export const getTourById = async (req, res) => {
       ...tour,
       averageRating,
       reviewCount: totalCount,
-      reviews: reviews.map(r => ({
-        ...r,
-        ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
-      })),
+      reviews: formatReviewsResponse(reviews, req.user?._id),
       reviewSummary: {
         average: averageRating,
         totalReviews: totalCount,

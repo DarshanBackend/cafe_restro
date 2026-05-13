@@ -9,6 +9,7 @@ import { sendNotification } from "../utils/notification.utils.js";
 
 import hotelBookingModel from "../model/hotel.booking.model.js";
 import mongoose from "mongoose";
+import { formatReviewsResponse } from "../utils/reviewUtils.js";
 
 export const createNewHotel = async (req, res) => {
   try {
@@ -108,10 +109,7 @@ export const getAllHotels = async (req, res) => {
         isFavorite: favoriteHotelIds.includes(hotel._id.toString()),
         averageRating: hotel.averageRating || 0,
         reviewCount: hotel.reviewCount || 0,
-        reviews: latestReviews.map(r => ({
-          ...r,
-          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
-        }))
+        reviews: formatReviewsResponse(latestReviews, req.user?._id)
       };
     }));
 
@@ -175,10 +173,7 @@ export const getHotelById = async (req, res) => {
       isFavorite,
       averageRating,
       reviewCount: totalCount,
-      reviews: reviews.map(r => ({
-        ...r,
-        ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
-      })),
+      reviews: formatReviewsResponse(reviews, req.user?._id),
       reviewSummary: {
         average: averageRating,
         totalReviews: totalCount,
@@ -367,10 +362,7 @@ export const getHotelByCityName = async (req, res) => {
         },
         reviewCount: hotel.reviewCount || 0,
         averageRating: hotel.averageRating || 0,
-        reviews: latestReviews.map(r => ({
-          ...r,
-          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
-        })),
+        reviews: formatReviewsResponse(latestReviews, req.user?._id),
         rooms: hotel.rooms?.map(room => ({
           type: room.type,
           pricePerNight: room.pricePerNight,
@@ -540,10 +532,7 @@ export const searchHotels = async (req, res) => {
         isFavorite: favoriteHotelIds.includes(hotel._id.toString()),
         averageRating: hotel.averageRating || 0,
         reviewCount: hotel.reviewCount || 0,
-        reviews: latestReviews.map(r => ({
-          ...r,
-          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
-        }))
+        reviews: formatReviewsResponse(latestReviews, req.user?._id)
       };
     }));
 
@@ -629,10 +618,7 @@ export const mainSearchHotels = async (req, res) => {
         isFavorite: favoriteHotelIds.includes(hotel._id.toString()),
         averageRating: hotel.averageRating || 0,
         reviewCount: hotel.reviewCount || 0,
-        reviews: latestReviews.map(r => ({
-          ...r,
-          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
-        }))
+        reviews: formatReviewsResponse(latestReviews, req.user?._id)
       };
     }));
 

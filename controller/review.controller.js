@@ -2,19 +2,11 @@ import mongoose from "mongoose";
 import reviewModel, { BUSINESS_TYPES } from "../model/review.model.js";
 import { uploadToS3, deleteFromS3 } from "../middleware/uploadS3.js";
 import { sendSuccess, sendError, sendNotFound, sendBadRequest } from "../utils/responseUtils.js";
+import { getRatingText, formatReviewResponse, formatReviewsResponse } from "../utils/reviewUtils.js";
 import log from "../utils/logger.js";
 
 
-const getRatingText = (rating) => {
-    switch (Number(rating)) {
-        case 1: return "Terrible";
-        case 2: return "Bad";
-        case 3: return "Okay";
-        case 4: return "Good";
-        case 5: return "Great";
-        default: return "No Rating";
-    }
-};
+// Removed local getRatingText and replaced with utility import
 
 
 const updateBusinessRatingStats = async (businessType, businessId) => {
@@ -89,10 +81,18 @@ export const addReview = async (req, res) => {
             media,
         });
 
-        
-        await updateBusinessRatingStats(businessType, businessId);
+        // Populate user details for consistent response
+        const populatedReview = await reviewModel.findById(review._id)
+            .populate("userId", "name avatar profilePicture")
+            .lean();
 
-        return sendSuccess(res, "Review added successfully", review);
+        // Use utility to format response
+        const finalReview = formatReviewResponse(populatedReview, null);
+
+        // Update stats in background
+        updateBusinessRatingStats(businessType, businessId).catch(err => log.error("Update stats error: " + err.message));
+
+        return sendSuccess(res, "Review added successfully", finalReview);
 
     } catch (error) {
         log.error("addReview Error: " + error.message);
@@ -174,14 +174,7 @@ export const getBusinessReviews = async (req, res) => {
 
         const average = totalCount > 0 ? (sumRating / totalCount).toFixed(1) : 0;
 
-        const formattedReviews = reviews.map(r => ({
-            ...r,
-            ratingText: getRatingText(r.rating),
-            likesCount: r.likes?.length || 0,
-            dislikesCount: r.dislikes?.length || 0,
-            likedByUser: req.user?._id ? r.likes?.some(id => id.toString() === req.user._id.toString()) : false,
-            dislikedByUser: req.user?._id ? r.dislikes?.some(id => id.toString() === req.user._id.toString()) : false
-        }));
+        const formattedReviews = formatReviewsResponse(reviews, req.user?._id);
 
         return sendSuccess(res, "Reviews fetched successfully", {
             summary: {
@@ -269,15 +262,19 @@ export const getUserReviews = async (req, res) => {
 
         const reviews = await reviewModel
             .find({ userId, isActive: true })
+            .populate("userId", "name avatar profilePicture")
             .populate("businessId", "name images address")
             .sort({ createdAt: -1 })
             .skip((parseInt(page) - 1) * parseInt(limit))
-            .limit(parseInt(limit));
+            .limit(parseInt(limit))
+            .lean();
 
         const total = await reviewModel.countDocuments({ userId, isActive: true });
 
+        const formattedReviews = formatReviewsResponse(reviews, req.user?._id);
+
         return sendSuccess(res, "User reviews fetched successfully", {
-            reviews,
+            reviews: formattedReviews,
             pagination: {
                 total,
                 page: parseInt(page),
@@ -304,12 +301,15 @@ export const getAllReviews = async (req, res) => {
             .populate("businessId", "name images")
             .sort({ createdAt: -1 })
             .skip((parseInt(page) - 1) * parseInt(limit))
-            .limit(parseInt(limit));
+            .limit(parseInt(limit))
+            .lean();
 
         const total = await reviewModel.countDocuments(filter);
 
+        const formattedReviews = formatReviewsResponse(reviews, req.user?._id);
+
         return sendSuccess(res, "All reviews fetched successfully", {
-            reviews,
+            reviews: formattedReviews,
             total,
             pages: Math.ceil(total / limit)
         });

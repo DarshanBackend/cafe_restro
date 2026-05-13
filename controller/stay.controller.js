@@ -4,6 +4,7 @@ import stayModel from "../model/stay.model.js";
 import adminModel from "../model/admin.model.js";
 import log from "../utils/logger.js";
 import { sendBadRequest, sendError, sendNotFound, sendSuccess } from "../utils/responseUtils.js";
+import { formatReviewsResponse } from "../utils/reviewUtils.js";
 
 
 
@@ -206,6 +207,8 @@ export const getAllStays = async (req, res) => {
       if (maxPrice) filter.actualPrice.$lte = Number(maxPrice);
     }
 
+    const stays = await stayModel.find(filter).lean();
+
     const reviewModel = mongoose.model("Review");
     const staysWithStats = await Promise.all(stays.map(async (stay) => {
       const latestReviews = await reviewModel.find({ 
@@ -222,10 +225,7 @@ export const getAllStays = async (req, res) => {
         ...stay,
         averageRating: stay.averageRating || 0,
         reviewCount: stay.reviewCount || 0,
-        reviews: latestReviews.map(r => ({
-          ...r,
-          ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
-        }))
+        reviews: formatReviewsResponse(latestReviews, req.user?._id)
       };
     }));
 
@@ -282,10 +282,7 @@ export const getStayById = async (req, res) => {
       ...stay,
       averageRating,
       reviewCount: totalCount,
-      reviews: reviews.map(r => ({
-        ...r,
-        ratingText: r.rating === 5 ? "Great" : r.rating === 4 ? "Good" : r.rating === 3 ? "Okay" : r.rating === 2 ? "Bad" : "Terrible"
-      })),
+      reviews: formatReviewsResponse(reviews, req.user?._id),
       reviewSummary: {
         average: averageRating,
         totalReviews: totalCount,
