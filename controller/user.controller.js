@@ -194,7 +194,6 @@ export const updateUser = async (req, res) => {
 
     
     delete updates.password;
-    delete updates.email;
     delete updates.otp;
     delete updates.otpExpires;
 
