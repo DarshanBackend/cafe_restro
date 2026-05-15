@@ -30,7 +30,7 @@ import { createOffer, deleteOffer, getAllOffers, getOfferById, toggleOfferStatus
 import { getMyPaymentsAndRefunds } from '../controller/payments.controller.js';
 import { downloadBookingInvoice } from '../controller/invoice.controller.js';
 import { getTrendingDestinations, WhatsNew, getCoffeeDates, getBrowseByPropertyTypes, getSpecialOffers, getLuxuryStays } from '../controller/home.controller.js';
-import { createNotification, deleteMyNotification, deleteNotification, getAllNotifications, getMyNotifications, getNotificationById, markAsRead, updateNotification } from '../controller/notification.controller.js';
+import { createNotification, deleteMyNotification, deleteNotification, getAllNotifications, getMyNotifications, getNotificationById, getNotificationSettings, markAsRead, updateNotification, updateNotificationSettings } from '../controller/notification.controller.js';
 import { createStay, deleteStay, getAllStays, getAdminStays, getStayById, updateStay } from '../controller/stay.controller.js';
 import { createThemeCategory, deleteThemeCategory, getAllThemeCategories, getThemeCategory, getThemesByArea, updateThemeCategory } from '../controller/themeCategory.controller.js';
 import { getMyBookingsUnified } from '../controller/my.bookings.controller.js';
@@ -269,6 +269,8 @@ indexRouter.delete("/deleteNotification/:id", AdminAuth, deleteNotification);
 indexRouter.get("/my/notifications", UserAuth, getMyNotifications);
 indexRouter.patch("/markNotificationAsRead/:id", UserAuth, markAsRead);
 indexRouter.delete("/deleteMyNotification/:id", UserAuth, deleteMyNotification);
+indexRouter.get("/myNotificationSettings", UserAuth, getNotificationSettings);
+indexRouter.put("/updateMyNotificationSettings", UserAuth, updateNotificationSettings);
 
 indexRouter.post("/createFaq", AdminAuth, createFaq);
 indexRouter.get("/getAllFaqs", getAllFaqs);

@@ -4,6 +4,7 @@
  */
 
 import notificationModel from "../model/notification.model.js";
+import userModel from "../model/user.model.js";
 import log from "../utils/logger.js";
 
 export const sendNotification = async ({
@@ -24,6 +25,23 @@ export const sendNotification = async ({
   try {
     if (!title || !message) {
       throw new Error("title and message are required fields.");
+    }
+
+    if (!isForAllUsers && userId) {
+      const user = await userModel.findById(userId);
+      if (user && user.notificationSettings) {
+        const settings = user.notificationSettings;
+        let isEnabled = true;
+
+        if (type === "OFFER" && !settings.newOffers) isEnabled = false;
+        if (type === "RENEWAL_OFFER" && !settings.renewalOffers) isEnabled = false;
+        if (["SYSTEM", "ADMIN", "PROMOTION"].includes(type) && !settings.announcements) isEnabled = false;
+        if (type === "CHAT" && !settings.newChatAlert) isEnabled = false;
+
+        if (!isEnabled) {
+          return { success: true, message: "Notification skipped based on user settings" };
+        }
+      }
     }
 
     const notificationData = {

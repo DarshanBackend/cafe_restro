@@ -129,6 +129,12 @@ const UserSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
     default: null
+  },
+  notificationSettings: {
+    newOffers: { type: Boolean, default: true },
+    renewalOffers: { type: Boolean, default: true },
+    announcements: { type: Boolean, default: true },
+    newChatAlert: { type: Boolean, default: true },
   }
 });
 

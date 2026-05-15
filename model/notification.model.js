@@ -37,7 +37,9 @@ const notificationSchema = new mongoose.Schema(
         "RESTAURANT_BOOKING",
         "TOUR_BOOKING",
         "HALL_BOOKING",
-        "STAY_BOOKING"
+        "STAY_BOOKING",
+        "CHAT",
+        "RENEWAL_OFFER"
       ],
       default: "SYSTEM",
     },

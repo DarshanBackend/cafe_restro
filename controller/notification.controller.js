@@ -27,6 +27,24 @@ export const getMyNotifications = async (req, res) => {
 
         const userObjectId = new mongoose.Types.ObjectId(userId);
 
+        const user = await userModel.findById(userId).select("notificationSettings");
+        const settings = user?.notificationSettings || {
+            newOffers: true,
+            renewalOffers: true,
+            announcements: true,
+            newChatAlert: true
+        };
+
+        const disabledTypes = [];
+        if (!settings.newOffers) disabledTypes.push("OFFER");
+        if (!settings.renewalOffers) disabledTypes.push("RENEWAL_OFFER");
+        if (!settings.announcements) {
+            disabledTypes.push("SYSTEM");
+            disabledTypes.push("ADMIN");
+            disabledTypes.push("PROMOTION");
+        }
+        if (!settings.newChatAlert) disabledTypes.push("CHAT");
+
         const filter = {
             $and: [
                 {
@@ -47,7 +65,13 @@ export const getMyNotifications = async (req, res) => {
         };
 
         if (type) {
-            filter.type = type;
+            if (disabledTypes.includes(type)) {
+                filter.type = "__DISABLED_TYPE__"; // This will ensure no results are found
+            } else {
+                filter.type = type;
+            }
+        } else if (disabledTypes.length > 0) {
+            filter.type = { $nin: disabledTypes };
         }
 
         const notifications = await notificationModel
@@ -57,7 +81,7 @@ export const getMyNotifications = async (req, res) => {
             .limit(parseInt(limit))
             .lean();
 
-        
+
         const processedNotifications = notifications.map(notification => {
             const read = notification.isForAllUsers
                 ? notification.readBy.some(id => id.toString() === userId.toString())
@@ -70,14 +94,14 @@ export const getMyNotifications = async (req, res) => {
             };
         });
 
-        
+
         let filtered = processedNotifications;
         if (isRead !== undefined) {
             const isReadBool = isRead === 'true';
             filtered = processedNotifications.filter(n => n.isRead === isReadBool);
         }
 
-        
+
         const now = new Date();
         const todayStart = new Date(now.setHours(0, 0, 0, 0));
         const yesterdayStart = new Date(new Date(todayStart).setDate(todayStart.getDate() - 1));
@@ -187,6 +211,20 @@ export const createNotification = async (req, res) => {
         } else {
             const user = await userModel.findById(userId);
             if (!user) return sendNotFound(res, "User not found");
+
+            const settings = user.notificationSettings;
+            let isEnabled = true;
+            if (type === "OFFER" && !settings?.newOffers) isEnabled = false;
+            if (type === "RENEWAL_OFFER" && !settings?.renewalOffers) isEnabled = false;
+            if (["SYSTEM", "ADMIN", "PROMOTION"].includes(type) && !settings?.announcements) isEnabled = false;
+            if (type === "CHAT" && !settings?.newChatAlert) isEnabled = false;
+
+            if (!isEnabled) {
+                return res.status(200).json({
+                    success: true,
+                    message: "Notification skipped based on user settings"
+                });
+            }
 
             notification = await notificationModel.create({
                 userId,
@@ -323,4 +361,41 @@ export const deleteMyNotification = async (req, res) => {
         return sendError(res, "Internal server error", error);
     }
 
+};
+
+export const getNotificationSettings = async (req, res) => {
+    try {
+        const userId = req.user?._id;
+        const user = await userModel.findById(userId).select("notificationSettings");
+        if (!user) return sendNotFound(res, "User not found");
+
+        return sendSuccess(res, "Notification settings fetched", user.notificationSettings);
+    } catch (error) {
+        return sendError(res, "Internal server error", error);
+    }
+};
+
+export const updateNotificationSettings = async (req, res) => {
+    try {
+        const userId = req.user?._id;
+        const { newOffers, renewalOffers, announcements, newChatAlert } = req.body;
+
+        const updates = {};
+        if (newOffers !== undefined && newOffers !== "") updates["notificationSettings.newOffers"] = String(newOffers) === 'true';
+        if (renewalOffers !== undefined && renewalOffers !== "") updates["notificationSettings.renewalOffers"] = String(renewalOffers) === 'true';
+        if (announcements !== undefined && announcements !== "") updates["notificationSettings.announcements"] = String(announcements) === 'true';
+        if (newChatAlert !== undefined && newChatAlert !== "") updates["notificationSettings.newChatAlert"] = String(newChatAlert) === 'true';
+
+        const user = await userModel.findByIdAndUpdate(
+            userId,
+            { $set: updates },
+            { new: true }
+        ).select("notificationSettings");
+
+        if (!user) return sendNotFound(res, "User not found");
+
+        return sendSuccess(res, "Notification settings updated", user.notificationSettings);
+    } catch (error) {
+        return sendError(res, "Internal server error", error);
+    }
 };
