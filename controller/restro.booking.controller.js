@@ -55,19 +55,36 @@ export const createRestaurantBooking = async (req, res) => {
     }
 
     const parseDate = (d) => {
-      const [day, month, year] = d.split("-");
-      return new Date(`${year}-${month}-${day}`);
+      if (!d || typeof d !== "string") return new Date(NaN);
+      const parts = d.split("-");
+      if (parts.length !== 3) return new Date(NaN);
+      const [day, month, year] = parts.map(Number);
+      return new Date(year, month - 1, day);
     };
 
     const checkIn = parseDate(checkInDate);
     const checkOut = parseDate(checkOutDate);
+
+    if (isNaN(checkIn.getTime()) || isNaN(checkOut.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format. Please use DD-MM-YYYY.",
+      });
+    }
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (checkIn < today) {
       return res.status(400).json({
         success: false,
-        message: "Check-in date cannot be in the past",
+        message: "Check-in date cannot be in the past.",
+      });
+    }
+
+    if (checkOut < checkIn) {
+      return res.status(400).json({
+        success: false,
+        message: "Check-out date cannot be before check-in date.",
       });
     }
 
@@ -434,14 +451,17 @@ export const previewRestroBooking = async (req, res) => {
     }
 
     const parseDate = (dateStr) => {
-      const [d, m, y] = dateStr.split("-");
-      return new Date(`${y}-${m}-${d}`);
+      if (!dateStr || typeof dateStr !== "string") return new Date(NaN);
+      const parts = dateStr.split("-");
+      if (parts.length !== 3) return new Date(NaN);
+      const [day, month, year] = parts.map(Number);
+      return new Date(year, month - 1, day);
     };
 
     const startDate = parseDate(checkInDate);
     const endDate = parseDate(checkOutDate);
 
-    if (isNaN(startDate) || isNaN(endDate)) {
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
       return res.status(400).json({ success: false, message: "Invalid date format (use DD-MM-YYYY)." });
     }
 
@@ -449,6 +469,10 @@ export const previewRestroBooking = async (req, res) => {
     today.setHours(0, 0, 0, 0);
     if (startDate < today) {
       return res.status(400).json({ success: false, message: "Check-in date cannot be in the past." });
+    }
+
+    if (endDate < startDate) {
+      return res.status(400).json({ success: false, message: "Check-out date must be after check-in date." });
     }
 
     const restaurant = await restroModel.findById(restaurantId).populate("themeCategoryId", "name");

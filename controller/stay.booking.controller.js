@@ -14,8 +14,11 @@ const timeToMinutes = (timeStr) => {
 };
 
 const parseDate = (dateStr) => {
-  const [day, month, year] = dateStr.split("-");
-  return new Date(`${year}-${month}-${day}`);
+  if (!dateStr || typeof dateStr !== "string") return new Date(NaN);
+  const parts = dateStr.split("-");
+  if (parts.length !== 3) return new Date(NaN);
+  const [day, month, year] = parts.map(Number);
+  return new Date(year, month - 1, day);
 };
 
 const round2 = (num) => Math.round(num * 100) / 100;
@@ -32,6 +35,16 @@ export const previewStayBooking = async (req, res) => {
       return sendBadRequest(res, "date and time are required (time format: HH:MM-HH:MM)");
     }
 
+    const bookingDate = parseDate(date);
+    if (isNaN(bookingDate.getTime())) {
+      return sendBadRequest(res, "Invalid date format. Use DD-MM-YYYY");
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (bookingDate < today) {
+      return sendBadRequest(res, "Booking date cannot be in the past");
+    }
 
     const timeParts = time.split("-");
     if (timeParts.length < 2) {

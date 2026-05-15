@@ -42,8 +42,11 @@ export const createHallBooking = async (req, res) => {
     }
 
     const convertToDate = (dateString) => {
-      const [day, month, year] = dateString.split('-');
-      return new Date(`${year}-${month}-${day}`);
+      if (!dateString || typeof dateString !== "string") return new Date(NaN);
+      const parts = dateString.split("-");
+      if (parts.length !== 3) return new Date(NaN);
+      const [day, month, year] = parts.map(Number);
+      return new Date(year, month - 1, day);
     };
 
     const start = convertToDate(startDate);
