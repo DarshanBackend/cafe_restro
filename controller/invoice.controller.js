@@ -3,13 +3,16 @@ import hotelBookingModel from "../model/hotel.booking.model.js";
 import restaurantBookingModel from "../model/restro.booking.model.js";
 import cafeBookingModel from "../model/cafe.booking.model.js";
 import hallBookingModel from "../model/hall.booking.model.js";
+import stayBookingModel from "../model/stay.booking.model.js";
 import { sendError } from "../utils/responseUtils.js";
+import mongoose from "mongoose";
 
 const bookingModels = [
   { type: "Hotel", model: hotelBookingModel, populateKey: "hotelId" },
   { type: "Restaurant", model: restaurantBookingModel, populateKey: "restaurantId" },
   { type: "Cafe", model: cafeBookingModel, populateKey: "cafeId" },
   { type: "Hall", model: hallBookingModel, populateKey: "hallId" },
+  { type: "Stay", model: stayBookingModel, populateKey: "stayId" },
 ];
 
 
@@ -32,28 +35,26 @@ const formatDate = (date) => {
   });
 };
 
-
-const formatTime = (time) => {
-  return new Date(`2000-01-01T${time}`).toLocaleTimeString('en-IN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true
-  });
-};
-
 export const downloadBookingInvoice = async (req, res) => {
   try {
     const { id } = req.params;
+    const { stream } = req.query;
     const { _id: userId } = req.user;
 
     let booking = null;
     let bookingType = "";
     let businessKey = "";
 
-    
+
     for (const { type, model, populateKey } of bookingModels) {
       const found = await model
-        .findOne({ _id: id, userId })
+        .findOne({
+          $or: [
+            { _id: mongoose.Types.ObjectId.isValid(id) ? id : null },
+            { bookingId: id }
+          ].filter(q => q._id !== null || q.bookingId),
+          userId
+        })
         .populate("userId")
         .populate(populateKey)
         .lean();
@@ -68,8 +69,28 @@ export const downloadBookingInvoice = async (req, res) => {
 
     if (!booking) return sendError(res, "Booking not found");
 
+
+    const paymentStatus = (booking.payment?.paymentStatus || booking.paymentStatus || 'pending').toLowerCase();
+    if (paymentStatus !== 'completed' && paymentStatus !== 'confirmed') {
+      return sendError(res, "Invoice can only be generated for completed or confirmed payments");
+    }
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const rawToken = req.headers.authorization?.split(" ")[1] || req.query.token;
+    const downloadUrl = `${baseUrl}/api/download-invoice/${id}?stream=true&token=${rawToken}`;
+
+    if (stream !== 'true') {
+      return res.status(200).json({
+        success: true,
+        message: "Invoice link generated successfully",
+        data: {
+          invoiceUrl: downloadUrl
+        }
+      });
+    }
+
     const business = booking[businessKey] || {};
-    const invoiceId = `INV-${booking.bookingId || booking._id.toString().slice(-8).toUpperCase()}`;
+    const invoiceId = `INV-${booking.bookingId || booking._id.toString().slice(-10).toUpperCase()}`;
     const invoiceDate = new Date(booking.createdAt).toLocaleDateString("en-IN");
 
     res.setHeader("Content-Type", "application/pdf");
@@ -81,15 +102,14 @@ export const downloadBookingInvoice = async (req, res) => {
     const doc = new PDFDocument({ margin: 50, size: 'A4' });
     doc.pipe(res);
 
-    
-    
+
     const pageWidth = doc.page.width;
     const leftMargin = 50;
-    const rightMargin = pageWidth - 50; 
+    const rightMargin = pageWidth - 50;
 
     doc.rect(0, 0, pageWidth, 100).fill("#1a365d");
 
-    
+
     doc.fillColor("white")
       .fontSize(24)
       .font("Helvetica-Bold")
@@ -99,31 +119,26 @@ export const downloadBookingInvoice = async (req, res) => {
       .text("Travel & Hospitality Services", leftMargin, 65)
       .text("contact@bookings.com | +91-9876543210", leftMargin, 80);
 
-    
-    const rightContentWidth = 220; 
+
+    const rightContentWidth = 220;
     const rightContentStart = rightMargin - rightContentWidth;
 
-    
     const lineHeight = 15;
     let rightY = 35;
 
     doc.fontSize(11)
       .font("Helvetica-Bold")
-      .text(`Invoice:`, rightContentStart, rightY, {
+      .text(`Invoice: ${invoiceId}`, rightContentStart, rightY, {
         width: rightContentWidth,
-        align: "right"
-      })
-      .font("Helvetica")
-      .text(`${invoiceId}`, rightContentStart, rightY, {
-        width: rightContentWidth - 60, 
         align: "right"
       });
 
     rightY += lineHeight;
-    
-    
-    
-    
+    doc.font("Helvetica")
+      .text(`Date: ${invoiceDate}`, rightContentStart, rightY, {
+        width: rightContentWidth,
+        align: "right"
+      });
 
     rightY += lineHeight;
     doc.text(`Type: ${bookingType}`, rightContentStart, rightY, {
@@ -131,19 +146,12 @@ export const downloadBookingInvoice = async (req, res) => {
       align: "right"
     });
 
-    rightY += lineHeight;
-    
-    
-    
-    
-    
-
     doc.moveDown(4);
 
-    
+
     const sectionTop = doc.y;
 
-    
+
     doc.rect(50, sectionTop, 250, 80).fill("#f7fafc").stroke("#e2e8f0");
     doc.fillColor("#2d3748")
       .fontSize(14)
@@ -157,7 +165,7 @@ export const downloadBookingInvoice = async (req, res) => {
       .text(`Email: ${booking.userId?.email || booking.guest?.email || "N/A"}`, 60, sectionTop + 45)
       .text(`Phone: ${booking.userId?.contactNo || booking.guest?.phone || "N/A"}`, 60, sectionTop + 60);
 
-    
+
     doc.rect(310, sectionTop, 240, 80).fill("#f7fafc").stroke("#e2e8f0");
     doc.fillColor("#2d3748")
       .fontSize(14)
@@ -172,17 +180,17 @@ export const downloadBookingInvoice = async (req, res) => {
 
     doc.moveDown(6);
 
-    
+
     doc.fillColor("#2d3748")
       .fontSize(16)
       .font("Helvetica-Bold")
       .text("BOOKING INFORMATION", 50, doc.y);
 
-    
+
     const bookingDetails = getBookingDetails(booking, bookingType);
     const tableTop = doc.y + 20;
 
-    
+
     doc.rect(50, tableTop, 500, 25).fill("#2d3748");
     doc.fillColor("white")
       .fontSize(11)
@@ -192,7 +200,7 @@ export const downloadBookingInvoice = async (req, res) => {
 
     let currentY = tableTop + 25;
 
-    
+
     bookingDetails.forEach((detail, index) => {
       const bgColor = index % 2 === 0 ? "#f7fafc" : "#ffffff";
       doc.rect(50, currentY, 500, 20).fill(bgColor).stroke("#e2e8f0");
@@ -212,7 +220,7 @@ export const downloadBookingInvoice = async (req, res) => {
 
     doc.y = currentY + 30;
 
-    
+
     doc.fillColor("#2d3748")
       .fontSize(16)
       .font("Helvetica-Bold")
@@ -221,7 +229,7 @@ export const downloadBookingInvoice = async (req, res) => {
     const paymentDetails = getPaymentDetails(booking, bookingType);
     const paymentTableTop = doc.y + 20;
 
-    
+
     doc.rect(50, paymentTableTop, 500, 25).fill("#2d3748");
     doc.fillColor("white")
       .fontSize(11)
@@ -231,7 +239,7 @@ export const downloadBookingInvoice = async (req, res) => {
 
     let paymentY = paymentTableTop + 25;
 
-    
+
     paymentDetails.forEach((item, index) => {
       const bgColor = index % 2 === 0 ? "#f7fafc" : "#ffffff";
       doc.rect(50, paymentY, 500, 20).fill(bgColor).stroke("#e2e8f0");
@@ -248,9 +256,8 @@ export const downloadBookingInvoice = async (req, res) => {
 
     doc.y = paymentY + 40;
 
-    
-    const paymentStatus = booking.payment?.paymentStatus || booking.paymentStatus || 'pending';
-    const statusColor = paymentStatus === 'completed' ? '#38a169' :
+
+    const statusColor = paymentStatus === 'completed' || paymentStatus === 'confirmed' ? '#38a169' :
       paymentStatus === 'pending' ? '#d69e2e' : '#e53e3e';
 
     doc.fillColor(statusColor)
@@ -266,7 +273,7 @@ export const downloadBookingInvoice = async (req, res) => {
 
     doc.moveDown(3);
 
-    
+
     doc.fillColor("#2d3748")
       .fontSize(12)
       .font("Helvetica-Bold")
@@ -282,7 +289,7 @@ export const downloadBookingInvoice = async (req, res) => {
 
     doc.moveDown(4);
 
-    
+
     doc.fillColor("#718096")
       .fontSize(8)
       .text("Thank you for your booking! For any queries, contact support@bookings.com",
@@ -301,13 +308,15 @@ export const downloadBookingInvoice = async (req, res) => {
 const getBusinessAddress = (business, type) => {
   switch (type) {
     case 'Restaurant':
-      return `${business.address?.street}, ${business.address?.city}`;
+      return `${business.address?.street || ""}, ${business.address?.city || ""}`;
     case 'Cafe':
-      return `${business.location?.address}, ${business.location?.city}`;
+      return `${business.location?.address || ""}, ${business.location?.city || ""}`;
     case 'Hotel':
-      return `${business.address?.street}, ${business.address?.city}`;
+      return `${business.address?.street || ""}, ${business.address?.city || ""}`;
+    case 'Stay':
+      return `${business.address || ""}, ${business.city || ""}`;
     case 'Hall':
-      return business.address;
+      return business.address || business.location || "N/A";
     default:
       return 'N/A';
   }
@@ -322,46 +331,40 @@ const getBusinessContact = (business) => {
 const getBookingDetails = (booking, type) => {
   const details = [];
 
-  details.push({ label: "Booking Reference", value: booking.bookingId });
+  details.push({ label: "Booking Reference", value: booking.bookingId || booking._id.toString() });
   details.push({ label: "Booking Status", value: booking.bookingStatus || booking.status || "Confirmed" });
 
   switch (type) {
     case 'Restaurant':
       details.push({ label: "Booking Date", value: formatDate(booking.bookingDate) });
-      details.push({ label: "Time Slot", value: `${booking.timeSlot?.startTime} - ${booking.timeSlot?.endTime}` });
-      details.push({ label: "Number of Guests", value: booking.numberOfGuests.toString() });
+      details.push({ label: "Time Slot", value: `${booking.timeSlot?.startTime || ""} - ${booking.timeSlot?.endTime || ""}` });
+      details.push({ label: "Number of Guests", value: (booking.numberOfGuests || 0).toString() });
       details.push({ label: "Table Number", value: booking.tableNumber || "N/A" });
-      if (booking.guestInfo?.specialRequests) {
-        details.push({ label: "Special Requests", value: booking.guestInfo.specialRequests });
-      }
       break;
 
     case 'Cafe':
-      details.push({ label: "Booking Date", value: formatDate(booking.bookingDate) });
-      details.push({ label: "Time Slot", value: booking.timeSlot });
-      details.push({ label: "Number of Guests", value: booking.numberOfGuests.toString() });
-      if (booking.guestInfo?.specialRequests) {
-        details.push({ label: "Special Requests", value: booking.guestInfo.specialRequests });
-      }
+      details.push({ label: "Booking Date", value: formatDate(booking.bookingDate || booking.checkInDate) });
+      details.push({ label: "Time Slot", value: booking.timeSlot || "N/A" });
+      details.push({ label: "Number of Guests", value: (booking.numberOfGuests || 0).toString() });
       break;
 
     case 'Hotel':
       details.push({ label: "Check-in Date", value: formatDate(booking.bookingDates?.checkInDate) });
       details.push({ label: "Check-out Date", value: formatDate(booking.bookingDates?.checkOutDate) });
-      details.push({ label: "Number of Nights", value: booking.bookingDates?.numberOfNights.toString() });
+      details.push({ label: "Number of Nights", value: (booking.bookingDates?.numberOfNights || 0).toString() });
       details.push({ label: "Guests", value: `${booking.guestInfo?.adults || 0} Adults, ${booking.guestInfo?.children || 0} Children` });
-      if (booking.guestInfo?.specialRequests) {
-        details.push({ label: "Special Requests", value: booking.guestInfo.specialRequests });
-      }
+      break;
+
+    case 'Stay':
+      details.push({ label: "Booking Date", value: formatDate(booking.date) });
+      details.push({ label: "Time Slot", value: `${booking.startTime || ""} - ${booking.endTime || ""}` });
+      details.push({ label: "Total Hours", value: (booking.totalHours || 0).toString() });
       break;
 
     case 'Hall':
       details.push({ label: "Event Date", value: formatDate(booking.startDate) });
-      details.push({ label: "Time Slot", value: `${booking.startTime} - ${booking.endTime}` });
-      details.push({ label: "Duration", value: `${booking.totalDays} day(s)` });
-      if (booking.specialRequests) {
-        details.push({ label: "Special Requirements", value: booking.specialRequests });
-      }
+      details.push({ label: "Time Slot", value: `${booking.startTime || ""} - ${booking.endTime || ""}` });
+      details.push({ label: "Duration", value: `${booking.totalDays || 0} day(s)` });
       break;
   }
 
@@ -372,78 +375,68 @@ const getPaymentDetails = (booking, type) => {
   const items = [];
   let currency = 'INR';
 
+  const pricing = booking.pricing || booking.billing || booking;
+
   switch (type) {
     case 'Restaurant':
-      currency = booking.billing?.currency || 'INR';
-      items.push({ label: "Base Amount", amount: formatCurrency(booking.billing?.baseAmount || 0, currency) });
-      if (booking.billing?.discount?.amount > 0) {
+      currency = pricing.currency || 'INR';
+      items.push({ label: "Base Amount", amount: formatCurrency(pricing.baseAmount || 0, currency) });
+      if (pricing.discount?.amount > 0) {
         items.push({
-          label: `Discount (${booking.billing.discount.percentage}%)`,
-          amount: `-${formatCurrency(booking.billing.discount.amount, currency)}`
+          label: `Discount (${pricing.discount.percentage}%)`,
+          amount: `-${formatCurrency(pricing.discount.amount, currency)}`
         });
       }
-      if (booking.billing?.taxAmount > 0) {
-        items.push({
-          label: `Tax (${booking.billing.taxPercentage}%)`,
-          amount: formatCurrency(booking.billing.taxAmount, currency)
-        });
+      if (pricing.taxAmount > 0) {
+        items.push({ label: "Tax", amount: formatCurrency(pricing.taxAmount, currency) });
       }
-      if (booking.billing?.teamService > 0) {
-        items.push({ label: "Service Charge", amount: formatCurrency(booking.billing.teamService, currency) });
-      }
-      items.push({ label: "Total Amount", amount: formatCurrency(booking.billing?.totalAmount || 0, currency), bold: true });
+      items.push({ label: "Total Amount", amount: formatCurrency(pricing.totalAmount || 0, currency), bold: true });
       break;
 
     case 'Cafe':
-      currency = booking.pricing?.currency || 'USD';
-      items.push({ label: "Per Guest Rate", amount: formatCurrency(booking.pricing?.perGuestRate || 0, currency) });
-      items.push({ label: "Total Guest Rate", amount: formatCurrency(booking.pricing?.totalGuestRate || 0, currency) });
-      if (booking.pricing?.discountAmount > 0) {
-        items.push({ label: "Discount", amount: `-${formatCurrency(booking.pricing.discountAmount, currency)}` });
+      currency = pricing.currency || 'INR';
+      items.push({ label: "Total Guest Rate", amount: formatCurrency(pricing.totalGuestRate || pricing.actualPrice || 0, currency) });
+      if (pricing.discountAmount > 0) {
+        items.push({ label: "Discount", amount: `-${formatCurrency(pricing.discountAmount, currency)}` });
       }
-      if (booking.pricing?.taxAmount > 0) {
-        items.push({
-          label: `Tax (${booking.pricing.taxPercentage}%)`,
-          amount: formatCurrency(booking.pricing.taxAmount, currency)
-        });
+      if (pricing.couponDiscountAmount > 0) {
+        items.push({ label: "Coupon Discount", amount: `-${formatCurrency(pricing.couponDiscountAmount, currency)}` });
       }
-      if (booking.pricing?.serviceFee > 0) {
-        items.push({ label: "Service Fee", amount: formatCurrency(booking.pricing.serviceFee, currency) });
+      if (pricing.taxesAndFeesAmount > 0) {
+        items.push({ label: "Taxes & Fees", amount: formatCurrency(pricing.taxesAndFeesAmount, currency) });
       }
-      items.push({ label: "Total Amount", amount: formatCurrency(booking.pricing?.totalAmount || 0, currency), bold: true });
+      items.push({ label: "Total Amount", amount: formatCurrency(pricing.totalAmount || 0, currency), bold: true });
       break;
 
     case 'Hotel':
-      currency = booking.pricing?.currency || 'INR';
-      items.push({ label: "Room Rate per Night", amount: formatCurrency(booking.pricing?.roomRatePerNight || 0, currency) });
-      items.push({ label: "Total Room Rate", amount: formatCurrency(booking.pricing?.totalRoomRate || 0, currency) });
-      if (booking.pricing?.discountAmount > 0) {
-        items.push({ label: "Discount", amount: `-${formatCurrency(booking.pricing.discountAmount, currency)}` });
+      currency = pricing.currency || 'INR';
+      items.push({ label: "Total Room Rate", amount: formatCurrency(pricing.totalRoomRate || pricing.actualPrice || 0, currency) });
+      if (pricing.discountAmount > 0) {
+        items.push({ label: "Discount", amount: `-${formatCurrency(pricing.discountAmount, currency)}` });
       }
-      if (booking.pricing?.taxAmount > 0) {
-        items.push({
-          label: `Tax (${booking.pricing.taxPercentage}%)`,
-          amount: formatCurrency(booking.pricing.taxAmount, currency)
-        });
+      if (pricing.couponDiscountAmount > 0) {
+        items.push({ label: "Coupon Discount", amount: `-${formatCurrency(pricing.couponDiscountAmount, currency)}` });
       }
-      if (booking.pricing?.serviceFee > 0) {
-        items.push({ label: "Service Fee", amount: formatCurrency(booking.pricing.serviceFee, currency) });
+      if (pricing.taxesAndFeesAmount > 0) {
+        items.push({ label: "Taxes & Fees", amount: formatCurrency(pricing.taxesAndFeesAmount, currency) });
       }
-      items.push({ label: "Total Amount", amount: formatCurrency(booking.pricing?.totalAmount || 0, currency), bold: true });
+      items.push({ label: "Total Amount", amount: formatCurrency(pricing.totalAmount || 0, currency), bold: true });
       break;
 
+    case 'Stay':
     case 'Hall':
-      items.push({ label: "Base Price", amount: formatCurrency(booking.basePrice || 0) });
-      if (booking.discountAmount > 0) {
-        items.push({
-          label: `Discount (${booking.discountPercentage}%)`,
-          amount: `-${formatCurrency(booking.discountAmount)}`
-        });
+      currency = pricing.currency || 'INR';
+      items.push({ label: "Base Price", amount: formatCurrency(pricing.actualPrice || 0, currency) });
+      if (pricing.discountAmount > 0) {
+        items.push({ label: "Discount", amount: `-${formatCurrency(pricing.discountAmount, currency)}` });
       }
-      if (booking.taxAmount > 0) {
-        items.push({ label: "Tax Amount", amount: formatCurrency(booking.taxAmount) });
+      if (pricing.coupon?.couponDiscount || pricing.couponDiscountAmount) {
+        items.push({ label: "Coupon Discount", amount: `-${formatCurrency(pricing.coupon?.couponDiscount || pricing.couponDiscountAmount, currency)}` });
       }
-      items.push({ label: "Final Amount", amount: formatCurrency(booking.finalAmount || 0), bold: true });
+      if (pricing.taxesAndFeesAmount > 0) {
+        items.push({ label: "Taxes & Fees", amount: formatCurrency(pricing.taxesAndFeesAmount, currency) });
+      }
+      items.push({ label: "Total Amount", amount: formatCurrency(pricing.payableAmount || pricing.finalAmount || pricing.totalAmount || 0, currency), bold: true });
       break;
   }
 
@@ -456,7 +449,8 @@ const getTermsAndConditions = (type) => {
     'Restaurant': "• Cancellation allowed up to 2 hours before booking time. • Late arrivals may result in table reassignment.",
     'Cafe': "• Reservation held for 15 minutes past booking time. • Outside food and beverages not allowed.",
     'Hotel': "• Standard check-in: 2:00 PM, check-out: 12:00 PM. • Early check-in/late check-out subject to availability and charges.",
-    'Hall': "• 50% advance payment required for confirmation. • Cancellation policy: 7 days notice for full refund."
+    'Stay': "• Hourly stay extensions are subject to availability. • Please vacate the room by the end of your slot.",
+    'Hall': "• Cancellation policy: 7 days notice for full refund. • Event guidelines must be followed."
   };
 
   return baseTerms + (specificTerms[type] || "• Please contact support for specific terms and conditions.");

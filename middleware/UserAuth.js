@@ -4,12 +4,17 @@ import { sendBadRequest, sendError } from "../utils/responseUtils.js";
 export const UserAuth = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
+    let token = null;
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return sendBadRequest(res, "Authorization token missing");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.split(" ")[1];
+    } else if (req.query.token) {
+      token = req.query.token;
     }
 
-    const token = authHeader.split(" ")[1];
+    if (!token) {
+      return sendBadRequest(res, "Authorization token missing");
+    }
 
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECET);

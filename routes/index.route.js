@@ -214,6 +214,7 @@ indexRouter.delete("/deleteTour/:id", deleteTour);
 
 indexRouter.get("/payments-and-refunds", UserAuth, getMyPaymentsAndRefunds);
 indexRouter.get("/myBookings/unified", UserAuth, getMyBookingsUnified);
+indexRouter.get("/download-invoice/:id", UserAuth, downloadBookingInvoice);
 
 indexRouter.get("/business/:businessId", getBusinessReviews);
 
