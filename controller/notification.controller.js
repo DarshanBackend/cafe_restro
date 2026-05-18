@@ -175,13 +175,15 @@ export const markAsRead = async (req, res) => {
 
 };
 
-export const createNotification = async (req, res) => {
+export const createNotification = async (req, res) => { 
     try {
         const { title, message, type, reference, expiresAt, sendToAll, userId } = req.body;
         let image = req.body.image || null;
 
-        if (req.file) {
-            image = await uploadToS3(req.file.buffer, req.file.originalname, req.file.mimetype, "notifications");
+        const uploadedFile = req.file || (req.files && req.files.image && req.files.image[0]);
+
+        if (uploadedFile) {
+            image = await uploadToS3(uploadedFile.buffer, uploadedFile.originalname, uploadedFile.mimetype, "notifications");
         }
 
         if (!title?.trim() || !message?.trim()) {
@@ -275,8 +277,8 @@ export const createNotification = async (req, res) => {
 
         return res.status(201).json({
             success: true,
-            message: isSendToAll 
-                ? "Notification created for all users" 
+            message: isSendToAll
+                ? "Notification created for all users"
                 : (pushStatus === 'SENT' ? "Notification created and push notification sent successfully" : "Notification created successfully (Push status: " + pushStatus + ")"),
             pushStatus,
             notification

@@ -262,10 +262,10 @@ indexRouter.get("/my-stay-bookings", UserAuth, getUserStayBookings);
 indexRouter.get("/getStayBookingById/:id", UserAuth, getStayBookingById);
 indexRouter.patch("/cancelStayBooking/:id", UserAuth, cancelStayBooking);
 
-indexRouter.post("/createNotification", AdminAuth, createNotification);
+indexRouter.post("/createNotification", AdminAuth, upload.fields([{ name: 'image', maxCount: 1 }]), createNotification);
 indexRouter.get("/getAllNotifications", AdminAuth, getAllNotifications);
 indexRouter.get("/getNotificationById/:id", getNotificationById);
-indexRouter.put("/updateNotification/:id", AdminAuth, updateNotification);
+indexRouter.put("/updateNotification/:id", AdminAuth, upload.fields([{ name: 'image', maxCount: 1 }]), updateNotification);
 indexRouter.delete("/deleteNotification/:id", AdminAuth, deleteNotification);
 
 indexRouter.get("/my/notifications", UserAuth, getMyNotifications);
