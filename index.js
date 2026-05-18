@@ -30,25 +30,20 @@ app.use((req, res, next) => {
   res.json = function (obj) {
     if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
       if (obj.success !== undefined) {
-        
+
         if (obj.message === undefined) {
           obj.message = obj.success ? "Success" : "Failed";
         }
 
-        if (obj.data !== undefined && obj.result === undefined) {
-          obj.result = obj.data;
-          delete obj.data;
+        // Change result to data
+        if (obj.result !== undefined && obj.data === undefined) {
+          obj.data = obj.result;
+          delete obj.result;
         }
 
-        if (obj.result === undefined && obj.success) {
-           obj.result = [];
-        }
-
-        if (obj.result !== undefined) {
-          if (!Array.isArray(obj.result)) {
-            obj.result = [obj.result];
-          }
-          obj.length = obj.result.length;
+        // Remove length
+        if (obj.length !== undefined) {
+          delete obj.length;
         }
       }
     }
