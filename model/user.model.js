@@ -130,6 +130,10 @@ const UserSchema = new mongoose.Schema({
     ref: "User",
     default: null
   },
+  fcmToken: {
+    type: String,
+    default: null
+  },
   notificationSettings: {
     newOffers: { type: Boolean, default: true },
     renewalOffers: { type: Boolean, default: true },

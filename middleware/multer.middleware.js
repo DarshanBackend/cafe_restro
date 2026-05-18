@@ -25,10 +25,14 @@ export const processAndUploadImages = async (req, res, next) => {
   try {
     // Check for duplicate hotel BEFORE uploading images
     const name = req.body?.name;
+    const hotelId = req.params?.hotelId; // For updates
+    
     if (name) {
       const existingHotel = await hotelModel.findOne({ name: name.trim() });
       if (existingHotel) {
-        return sendBadRequest(res, "Hotel already exists");
+        if (!hotelId || existingHotel._id.toString() !== hotelId) {
+          return sendBadRequest(res, "Hotel already exists");
+        }
       }
     }
 

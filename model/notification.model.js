@@ -26,20 +26,16 @@ const notificationSchema = new mongoose.Schema(
     type: {
       type: String,
       enum: [
+        "CAFE_BOOKING",
+        "HOTEL_BOOKING",
+        "STAY_BOOKING",
+        "RESTAURANT_BOOKING",
         "OFFER",
         "SYSTEM",
         "ADMIN",
         "WALLET",
         "PROMOTION",
-        "REVIEW_REMINDER",
-        "HOTEL_BOOKING",
-        "CAFE_BOOKING",
-        "RESTAURANT_BOOKING",
-        "TOUR_BOOKING",
-        "HALL_BOOKING",
-        "STAY_BOOKING",
-        "CHAT",
-        "RENEWAL_OFFER"
+        "REVIEW_REMINDER"
       ],
       default: "SYSTEM",
     },

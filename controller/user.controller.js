@@ -708,3 +708,29 @@ export const getUserProfile = async (req, res) => {
     return sendError(res, error, `Error fetching user profile: ${error.message}`);
   }
 };
+
+export const updateFcmToken = async (req, res) => {
+  try {
+    const { _id } = req.user;
+    const { fcmToken } = req.body;
+
+    if (!fcmToken) {
+      return sendBadRequest(res, "fcmToken is required");
+    }
+
+    const updatedUser = await userModel.findByIdAndUpdate(
+      _id,
+      { fcmToken },
+      { new: true }
+    ).select("name email fcmToken");
+
+    if (!updatedUser) {
+      return sendNotFound(res, "User not found");
+    }
+
+    return sendSuccess(res, updatedUser, "FCM Token updated successfully");
+  } catch (error) {
+    log.error(`Error updating FCM token: ${error.message}`);
+    return sendError(res, error, `Error updating FCM token: ${error.message}`);
+  }
+};

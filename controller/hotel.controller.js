@@ -672,7 +672,20 @@ export const updateHotel = async (req, res) => {
 
     
     if (req.files?.hotelImages) {
-      updateData.images = [...(hotel.images || []), ...req.files.hotelImages];
+      // Delete old images from S3
+      if (Array.isArray(hotel.images) && hotel.images.length > 0) {
+        const imagesToDelete = hotel.images
+          .map((imgUrl) => imgUrl.split(".amazonaws.com/")[1])
+          .filter(Boolean);
+          
+        if (imagesToDelete.length > 0) {
+          await Promise.allSettled(
+            imagesToDelete.map((key) => deleteFromS3(key))
+          ).catch((err) => log.warn("Failed to delete old images:", err.message));
+        }
+      }
+      // Replace with new images
+      updateData.images = req.files.hotelImages;
     }
 
     const updatedHotel = await hotelModel.findByIdAndUpdate(

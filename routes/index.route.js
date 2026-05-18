@@ -1,5 +1,5 @@
 import express from 'express';
-import { ForgotOtpSend, ResetPassword, VerifyOtp, changeUserPassword, deleteUser, getAllUsers, getUserById, getUserProfile, googleLogin, newUserRegister, updateUser, addUserAddress, getUserAddresses, updateAddress, deleteAddress, userLogin, userLogout } from '../controller/user.controller.js';
+import { ForgotOtpSend, ResetPassword, VerifyOtp, changeUserPassword, deleteUser, getAllUsers, getUserById, getUserProfile, googleLogin, newUserRegister, updateUser, addUserAddress, getUserAddresses, updateAddress, deleteAddress, userLogin, userLogout, updateFcmToken } from '../controller/user.controller.js';
 import { UserAuth } from '../middleware/UserAuth.js';
 import { OptionalUserAuth } from '../middleware/OptionalUserAuth.js';
 import { adminLogin, adminUpdate, deleteAdmin, getAdminById, getAllAdmins, newAdminRegister } from '../controller/admin.controller.js';
@@ -60,6 +60,7 @@ indexRouter.delete("/deleteUser/:id", deleteUser);
 indexRouter.post("/changeUserPassword", UserAuth, changeUserPassword)
 indexRouter.post("/logout", UserAuth, userLogout)
 indexRouter.get("/userProfile", UserAuth, getUserProfile)
+indexRouter.patch("/updateFcmToken", UserAuth, updateFcmToken);
 
 indexRouter.get("/wallet", UserAuth, getWalletDetails);
 indexRouter.post("/wallet/addMoney", UserAuth, addMoneyToWallet);
@@ -82,7 +83,7 @@ indexRouter.get('/luxury-stays', OptionalUserAuth, getLuxuryStays);
 indexRouter.post("/createNewHotel", AdminAuth, uploadFiles, handleMulterErrors, processAndUploadImages, createNewHotel);
 indexRouter.get("/getAllHotels", OptionalUserAuth, getAllHotels);
 indexRouter.get("/getHotelById/:hotelId", OptionalUserAuth, getHotelById);
-indexRouter.patch("/updateHotel/:hotelId", AdminAuth, uploadFiles, updateHotel);
+indexRouter.patch("/updateHotel/:hotelId", AdminAuth, uploadFiles, handleMulterErrors, processAndUploadImages, updateHotel);
 indexRouter.delete("/deleteHotel/:hotelId", AdminAuth, deleteHotels);
 indexRouter.get("/getHotelByCityName/:name", OptionalUserAuth, getHotelByCityName);
 indexRouter.get("/city-suggestions", getCitySuggestions);

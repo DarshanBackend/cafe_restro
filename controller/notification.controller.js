@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import { uploadToS3, deleteFromS3 } from '../middleware/uploadS3.js';
 import log from "../utils/logger.js";
 import { sendSuccess, sendError, sendNotFound } from "../utils/responseUtils.js";
+import { sendPushNotification, sendMulticastNotification } from '../utils/notification.sender.js';
 
 const timeAgo = (date) => {
     const seconds = Math.floor((new Date() - new Date(date)) / 1000);
@@ -194,6 +195,8 @@ export const createNotification = async (req, res) => {
         }
 
         let notification;
+        let pushStatus = 'NOT_SENT';
+
         if (isSendToAll) {
             notification = await notificationModel.createBulkNotification({
                 type: type || "SYSTEM",
@@ -208,6 +211,22 @@ export const createNotification = async (req, res) => {
                 reference: reference || null,
                 expiresAt: expiresAt || null,
             });
+
+            try {
+                const usersWithToken = await userModel.find({
+                    fcmToken: { $ne: null, $exists: true }
+                }).select('fcmToken');
+                const tokens = usersWithToken.map(u => u.fcmToken);
+                if (tokens.length > 0) {
+                    sendMulticastNotification(tokens, title, message, {
+                        type: type || "SYSTEM",
+                        image: image || "",
+                        notificationId: notification._id.toString()
+                    });
+                }
+            } catch (pushError) {
+                log.error("Failed to send bulk push notifications: " + pushError.message);
+            }
         } else {
             const user = await userModel.findById(userId);
             if (!user) return sendNotFound(res, "User not found");
@@ -241,11 +260,25 @@ export const createNotification = async (req, res) => {
                 reference: reference || null,
                 expiresAt: expiresAt || null,
             });
+
+            if (user.fcmToken) {
+                const sent = await sendPushNotification(user.fcmToken, title, message, {
+                    type: type || "SYSTEM",
+                    image: image || "",
+                    notificationId: notification._id.toString()
+                });
+                pushStatus = sent === true ? 'SENT' : sent === 'INVALID_TOKEN' ? 'INVALID_TOKEN' : 'FAILED';
+            } else {
+                pushStatus = 'NO_FCM_TOKEN';
+            }
         }
 
         return res.status(201).json({
             success: true,
-            message: isSendToAll ? "Notification created for all users" : "Notification created successfully",
+            message: isSendToAll 
+                ? "Notification created for all users" 
+                : (pushStatus === 'SENT' ? "Notification created and push notification sent successfully" : "Notification created successfully (Push status: " + pushStatus + ")"),
+            pushStatus,
             notification
         });
 
