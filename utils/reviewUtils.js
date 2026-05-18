@@ -9,14 +9,8 @@ export const getRatingText = (rating) => {
     }
 };
 
-/**
- * Formats a single review object consistently
- * @param {Object} review - The review object (plain JS or Mongoose)
- * @param {String} currentUserId - The ID of the currently logged-in user
- * @returns {Object} Formatted review
- */
+
 export const formatReviewResponse = (review, currentUserId = null) => {
-    // Convert to plain object if it's a Mongoose document
     const r = typeof review.toObject === 'function' ? review.toObject() : review;
     
     return {
@@ -29,12 +23,6 @@ export const formatReviewResponse = (review, currentUserId = null) => {
     };
 };
 
-/**
- * Formats an array of review objects consistently
- * @param {Array} reviews - Array of review objects
- * @param {String} currentUserId - The ID of the currently logged-in user
- * @returns {Array} Formatted reviews
- */
 export const formatReviewsResponse = (reviews, currentUserId = null) => {
     if (!Array.isArray(reviews)) return [];
     return reviews.map(r => formatReviewResponse(r, currentUserId));

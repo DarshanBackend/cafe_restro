@@ -127,7 +127,6 @@ cafeBookingSchema.pre("validate", function (next) {
   const guests = this.adults + this.children;
   const numGuests = this.numberOfGuests || guests || 1;
 
-  // Only auto-calculate if not already set
   if (!this.pricing.totalGuestRate) {
     this.pricing.totalGuestRate = this.pricing.perGuestRate * numGuests;
   }

@@ -134,7 +134,6 @@ export const getTourById = async (req, res) => {
     const tour = await tourModel.findById(id).lean();
     if (!tour) return sendNotFound(res, "Tour not found");
 
-    // Fetch reviews from centralized Review model
     const reviewModel = mongoose.model("Review");
     const reviews = await reviewModel.find({ businessId: id, businessType: 'Tour', isActive: true })
       .populate('userId', 'name avatar profilePicture')

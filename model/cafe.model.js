@@ -76,8 +76,8 @@ const CafeSchema = new mongoose.Schema({
     default: false
   },
   amenities: [{
-    type: String,
-    trim: true
+    name: { type: String },
+    icon: { type: String }
   }],
   services: [{
     type: String,
@@ -147,7 +147,6 @@ const CafeSchema = new mongoose.Schema({
   }
 });
 
-// Indexes for better query performance
 CafeSchema.index({ "location.coordinates": "2dsphere" });
 CafeSchema.index({ name: "text", description: "text" });
 CafeSchema.index({ popular: -1, rating: -1 });
@@ -155,13 +154,11 @@ CafeSchema.index({ "location.city": 1 });
 CafeSchema.index({ status: 1 });
 CafeSchema.index({ createdBy: 1 });
 
-// Update the updatedAt field before saving
 CafeSchema.pre('save', function (next) {
   this.updatedAt = Date.now();
   next();
 });
 
-// Static method to find cafes by location
 CafeSchema.statics.findByLocation = function (city, country) {
   return this.find({
     'location.city': new RegExp(city, 'i'),
@@ -170,7 +167,6 @@ CafeSchema.statics.findByLocation = function (city, country) {
   });
 };
 
-// Static method to find popular cafes
 CafeSchema.statics.findPopular = function (limit = 10) {
   return this.find({
     popular: true,
@@ -180,11 +176,10 @@ CafeSchema.statics.findPopular = function (limit = 10) {
     .limit(limit);
 };
 
-// Instance method to check if cafe is open
 CafeSchema.methods.isOpenNow = function () {
   const now = new Date();
   const today = now.toLocaleString('en-us', { weekday: 'long' }).toLowerCase();
-  const currentTime = now.toTimeString().slice(0, 5); // HH:MM format
+  const currentTime = now.toTimeString().slice(0, 5);
 
   const hours = this.operatingHours[today];
   if (!hours || !hours.open || !hours.close) return false;

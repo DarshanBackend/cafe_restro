@@ -55,10 +55,9 @@ const eventSchema = new mongoose.Schema({
     default: "50k+"
   }
 }, {
-  timestamps: true // Adds createdAt and updatedAt automatically
+  timestamps: true
 });
 
-// Index for better search performance
 eventSchema.index({ eventName: "text", addresss: "text" });
 eventSchema.index({ typesOfEvent: 1 });
 eventSchema.index({ createdAt: 1 });

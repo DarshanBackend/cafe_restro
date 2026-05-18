@@ -19,17 +19,15 @@ export const AdminAuth = async (req, res, next) => {
       return sendBadRequest(res, "Token not provided");
     }
 
-    // Verify token
     const decoded = jwt.verify(token, JWT_SECRET);
 
     if (decoded.role !== "superadmin") {
       return sendBadRequest(res, "Access denied: User is not an admin");
     }
 
-    // Attach decoded admin data to req for downstream usage
     req.admin = decoded;
 
-    next(); // continue to the next middleware/controller
+    next();
   } catch (error) {
     log.error(`Admin token verification failed: ${error.message}`);
 

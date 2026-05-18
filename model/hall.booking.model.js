@@ -88,7 +88,6 @@ const bookingSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index for better query performance
 bookingSchema.index({ userId: 1 });
 bookingSchema.index({ adminId: 1 });
 bookingSchema.index({ hallId: 1 });
@@ -98,4 +97,4 @@ bookingSchema.index({ bookingStatus: 1 });
 
 const hallBookingModel = mongoose.model('HallBooking', bookingSchema);
 
-export default hallBookingModel;
+export default hallBookingModel;

@@ -5,7 +5,10 @@ const roomSchema = new mongoose.Schema({
   actualPrice: { type: Number, required: true },
   discountPrice: { type: Number, required: true },
   maxGuests: { type: Number, required: true },
-  amenities: [{ type: String }],
+  amenities: [{
+    name: { type: String },
+    icon: { type: String }
+  }],
   images: [{ type: String }],
 });
 
@@ -42,7 +45,10 @@ const hotelSchema = new mongoose.Schema(
     images: [{ type: String }],
     actualPrice: { type: Number, required: true },  
     discountPrice: { type: Number, required: true },
-    amenities: [{ type: String }],
+    amenities: [{
+      name: { type: String },
+      icon: { type: String }
+    }],
     ourService: {
       connectVieCall: { type: String, default: null },
       connectVieMessage: { type: String, default: null },

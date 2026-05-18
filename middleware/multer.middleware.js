@@ -1,16 +1,14 @@
 import multer from "multer";
 import { sendBadRequest } from "../utils/responseUtils.js";
-import { uploadToS3, resizeImage } from "./uploadS3.js"; // your S3 helper
+import { uploadToS3, resizeImage } from "./uploadS3.js";
 import sharp from "sharp";
 import hotelModel from "../model/hotel.model.js";
 
-// 1️⃣ Multer memory storage
 const storage = multer.memoryStorage();
 
-// 2️⃣ Multer setup
 export const uploadFiles = multer({
   storage,
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB per file
+  limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (!file.mimetype.startsWith("image/")) {
       return cb(new Error("Only image files are allowed"), false);
@@ -19,14 +17,11 @@ export const uploadFiles = multer({
   },
 }).any();
 
-// 3️⃣ Middleware to normalize & upload images to S3
-// NOTE: Check for duplicate hotel BEFORE uploading to S3 to prevent orphaned images
 export const processAndUploadImages = async (req, res, next) => {
   try {
-    // Check for duplicate hotel BEFORE uploading images
     const name = req.body?.name;
-    const hotelId = req.params?.hotelId; // For updates
-    
+    const hotelId = req.params?.hotelId;
+
     if (name) {
       const existingHotel = await hotelModel.findOne({ name: name.trim() });
       if (existingHotel) {
@@ -39,14 +34,12 @@ export const processAndUploadImages = async (req, res, next) => {
     if (!req.files || req.files.length === 0) return next();
 
     const hotelImagesFiles = [];
-    const roomImageGroups = {}; // { "0": [file1, file2], "1": [file3] }
+    const roomImageGroups = {};
 
-    // Separate hotelImages vs roomImages and group room images by index
     req.files.forEach((file) => {
       if (file.fieldname === "hotelImages") {
         hotelImagesFiles.push(file);
       } else if (file.fieldname.startsWith("roomImages")) {
-        // Support both "roomImages_0" and "roomImages-0" naming
         const match = file.fieldname.match(/^roomImages[-_](\d+)$/);
         if (match) {
           const roomIndex = match[1];
@@ -56,7 +49,6 @@ export const processAndUploadImages = async (req, res, next) => {
       }
     });
 
-    // 1️⃣ Upload hotel images to S3
     req.files.hotelImages = await Promise.all(
       hotelImagesFiles.map(async (file) => {
         const buffer = await resizeImage(file.buffer, { width: 1024, height: 768, quality: 80 });
@@ -64,7 +56,6 @@ export const processAndUploadImages = async (req, res, next) => {
       })
     );
 
-    // 2️⃣ Upload room images to S3 grouped by room index
     req.files.roomImages = {};
     for (const [roomIndex, files] of Object.entries(roomImageGroups)) {
       req.files.roomImages[roomIndex] = await Promise.all(
@@ -75,6 +66,37 @@ export const processAndUploadImages = async (req, res, next) => {
       );
     }
 
+    const amenityIconFiles = [];
+    const amenityIconMap = {};
+
+    req.files.forEach((file) => {
+      if (file.fieldname === "amenityIcons") {
+        amenityIconFiles.push(file);
+      } else if (file.fieldname.startsWith("amenityIcons_") || file.fieldname.startsWith("amenityIcons-")) {
+        const match = file.fieldname.match(/^amenityIcons[-_](\d+)$/);
+        if (match) {
+          amenityIconMap[match[1]] = file;
+        } else {
+          amenityIconFiles.push(file);
+        }
+      } else if (file.fieldname.match(/^amenities\[(\d+)\]$/)) {
+        const match = file.fieldname.match(/^amenities\[(\d+)\]$/);
+        amenityIconMap[match[1]] = file;
+      }
+    });
+
+    req.files.amenityIconsMapped = {};
+
+    for (const [index, file] of Object.entries(amenityIconMap)) {
+      req.files.amenityIconsMapped[index] = await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+    }
+
+    req.files.amenityIconsArray = await Promise.all(
+      amenityIconFiles.map(async (file) => {
+        return await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+      })
+    );
+
     next();
   } catch (error) {
     console.error("S3 Upload Error:", error);
@@ -82,7 +104,6 @@ export const processAndUploadImages = async (req, res, next) => {
   }
 };
 
-// 4️⃣ Handle multer errors
 export const handleMulterErrors = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === "LIMIT_FILE_SIZE") return sendBadRequest(res, "File size too large. Max 20MB per file");

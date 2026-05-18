@@ -124,7 +124,6 @@ const restaurantBookingSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Pre-validate hook for calculations (Same as Cafe/Hotel)
 restaurantBookingSchema.pre("validate", function (next) {
   const guests = (this.adults || 0) + (this.children || 0);
   const numGuests = this.numberOfGuests || guests || 1;

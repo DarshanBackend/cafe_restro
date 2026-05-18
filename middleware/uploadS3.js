@@ -6,16 +6,16 @@ import log from "../utils/logger.js";
 
 export const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB limit
+  limits: { fileSize: 20 * 1024 * 1024 },
 });
 
 export const s3 = new S3Client({
-  region: _config.S3_REGION, // MUST match bucket region
+  region: _config.S3_REGION,
   credentials: {
     accessKeyId: _config.S3_ACCESS_KEY,
     secretAccessKey: _config.S3_SECRET_KEY,
   },
-  forcePathStyle: false, // false for standard S3 buckets
+  forcePathStyle: false,
 });
 
 
@@ -23,7 +23,6 @@ export const uploadToS3 = async (buffer, filename, mimetype, folder = "uploads")
   try {
     if (!buffer) throw new Error("Missing file buffer");
 
-    // Clean filename and make it unique
     const safeName = filename.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9._-]/g, "");
     const key = `${folder}/${Date.now()}_${safeName}`;
 
@@ -36,7 +35,6 @@ export const uploadToS3 = async (buffer, filename, mimetype, folder = "uploads")
       })
     );
 
-    // Return direct S3 file URL
     return `https://${_config.S3_BUCKET_NAME}.s3.${_config.S3_REGION}.amazonaws.com/${key}`;
   } catch (error) {
     console.error("S3 Upload Error:", error);
@@ -88,22 +86,6 @@ export const listAllS3Images = async () => {
     throw error;
   }
 };
-
-
-
-// **
-//  * Delete a file from S3
-//  * @param {string} key - The S3 object key (e.g., "hotels/1697201234567_image.jpg")
-//  */
-
-// const imageUrl = "https://my-bucket.s3.eu-north-1.amazonaws.com/hotels/1697201234567_image.jpg";
-
-// // Extract key from URL
-// const key = imageUrl.split(".amazonaws.com/")[1]; 
-// // key = "hotels/1697201234567_image.jpg"
-
-// await deleteFromS3(key);
-
 
 export const deleteFromS3 = async (key) => {
   if (!key) throw new Error("S3 object key is required for deletion");

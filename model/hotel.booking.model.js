@@ -76,38 +76,11 @@ const hotelBookingSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Virtual for duration
 hotelBookingSchema.virtual("duration").get(function () {
   const checkIn = new Date(this.bookingDates.checkInDate);
   const checkOut = new Date(this.bookingDates.checkOutDate);
   return Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
 });
-
-// Pre-validation auto-calculation
-// hotelBookingSchema.pre("validate", function (next) {
-//   if (this.bookingDates.checkOutDate <= this.bookingDates.checkInDate) {
-//     return next(new Error("Check-out date must be after check-in date"));
-//   }
-
-//   const nights = Math.ceil(
-//     (new Date(this.bookingDates.checkOutDate) - new Date(this.bookingDates.checkInDate)) /
-//     (1000 * 60 * 60 * 24)
-//   );
-//   this.bookingDates.numberOfNights = nights;
-
-//   // Calculate pricing
-//   this.pricing.totalRoomRate = this.pricing.roomRatePerNight * nights;
-//   this.pricing.discountAmount =
-//     (this.pricing.totalRoomRate * this.pricing.discountPercentage) / 100;
-//   const subtotal = this.pricing.totalRoomRate - this.pricing.discountAmount;
-
-//   this.pricing.taxAmount = (subtotal * this.pricing.taxPercentage) / 100;
-//   this.pricing.serviceFeeAmount = (subtotal * this.pricing.serviceFeePercentage) / 100;
-//   this.pricing.totalAmount =
-//     subtotal + this.pricing.taxAmount + this.pricing.serviceFeeAmount;
-
-//   next();
-// });
 
 const hotelBookingModel = mongoose.model("HotelBooking", hotelBookingSchema);
 export default hotelBookingModel;

@@ -39,18 +39,53 @@ export const createStay = async (req, res) => {
       return sendBadRequest(res, "A stay with this name, address and city already exists");
     }
 
-    
-    let parsedAmenities = [];
-    if (amenities) {
-      parsedAmenities = Array.isArray(amenities)
-        ? amenities
-        : (() => { try { return JSON.parse(amenities); } catch { return [amenities]; } })();
+    let finalAmenities = typeof amenities === "string" ? JSON.parse(amenities) : amenities || [];
+    for (const key in req.body) {
+      const match = key.match(/^amenities\[(\d+)\]$/);
+      if (match) {
+        finalAmenities[parseInt(match[1], 10)] = req.body[key];
+      }
+    }
+    finalAmenities = finalAmenities.map(am => typeof am === 'string' ? { name: am, icon: "" } : am);
+    const amenityIconFiles = [];
+    const amenityIconMap = {};
+
+    if (Array.isArray(req.files) && req.files.length > 0) {
+      req.files.forEach((file) => {
+        if (file.fieldname === "amenityIcons") {
+          amenityIconFiles.push(file);
+        } else if (file.fieldname.startsWith("amenityIcons_") || file.fieldname.startsWith("amenityIcons-")) {
+          const match = file.fieldname.match(/^amenityIcons[-_](\d+)$/);
+          if (match) {
+            amenityIconMap[match[1]] = file;
+          } else {
+            amenityIconFiles.push(file);
+          }
+        } else if (file.fieldname.match(/^amenities\[(\d+)\]$/)) {
+          const match = file.fieldname.match(/^amenities\[(\d+)\]$/);
+          if (match) {
+            amenityIconMap[match[1]] = file;
+          }
+        }
+      });
+    }
+
+    let iconIndex = 0;
+    for (let i = 0; i < finalAmenities.length; i++) {
+      const am = finalAmenities[i];
+      if (amenityIconMap[i]) {
+        const file = amenityIconMap[i];
+        am.icon = await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+      } else if (amenityIconFiles[iconIndex]) {
+        const file = amenityIconFiles[iconIndex];
+        am.icon = await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+        iconIndex++;
+      }
     }
 
     
     let imageUrls = [];
-    const files = req.files?.["stayImage"] || req.files?.["images"] || [];
-    const fileArr = Array.isArray(files) ? files : [files];
+    const fileArr = Array.isArray(req.files) ? req.files.filter(f => f.fieldname === "stayImage" || f.fieldname === "images") : [];
 
     for (const file of fileArr) {
       if (file?.buffer) {
@@ -68,7 +103,7 @@ export const createStay = async (req, res) => {
       actualPrice: Number(resolvedActualPrice),
       discountPrice: discountPrice ? Number(discountPrice) : 0,
       pricePerHour: Number(resolvedActualPrice),
-      amenities: parsedAmenities,
+      amenities: finalAmenities,
       images: imageUrls,
       adminId
     });
@@ -107,14 +142,63 @@ export const updateStay = async (req, res) => {
     if (updates.actualPrice) updates.pricePerHour = updates.actualPrice;
     if (updates.pricePerHour && !updates.actualPrice) updates.actualPrice = updates.pricePerHour;
 
-    
-    if (updates.amenities && !Array.isArray(updates.amenities)) {
-      try { updates.amenities = JSON.parse(updates.amenities); } catch { updates.amenities = [updates.amenities]; }
+    if (updates.amenities || Object.keys(req.body).some(k => k.startsWith('amenities['))) {
+      let finalAmenities = typeof updates.amenities === "string" ? JSON.parse(updates.amenities) : updates.amenities || [];
+      for (const key in req.body) {
+        const match = key.match(/^amenities\[(\d+)\]$/);
+        if (match) {
+          finalAmenities[parseInt(match[1], 10)] = req.body[key];
+          delete updates[key];
+        }
+      }
+      finalAmenities = finalAmenities.map(am => typeof am === 'string' ? { name: am, icon: "" } : am);
+      const amenityIconFiles = [];
+      const amenityIconMap = {};
+
+      if (Array.isArray(req.files) && req.files.length > 0) {
+        req.files.forEach((file) => {
+          if (file.fieldname === "amenityIcons") {
+            amenityIconFiles.push(file);
+          } else if (file.fieldname.startsWith("amenityIcons_") || file.fieldname.startsWith("amenityIcons-")) {
+            const match = file.fieldname.match(/^amenityIcons[-_](\d+)$/);
+            if (match) {
+              amenityIconMap[match[1]] = file;
+            } else {
+              amenityIconFiles.push(file);
+            }
+          } else if (file.fieldname.match(/^amenities\[(\d+)\]$/)) {
+            const match = file.fieldname.match(/^amenities\[(\d+)\]$/);
+            if (match) {
+              amenityIconMap[match[1]] = file;
+            }
+          }
+        });
+      }
+
+      let iconIndex = 0;
+      for (let i = 0; i < finalAmenities.length; i++) {
+        const am = finalAmenities[i];
+        if (amenityIconMap[i]) {
+          const file = amenityIconMap[i];
+          am.icon = await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+        } else if (amenityIconFiles[iconIndex]) {
+          const file = amenityIconFiles[iconIndex];
+          am.icon = await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+          iconIndex++;
+        }
+      }
+      const oldIcons = stay.amenities?.map(a => a.icon).filter(Boolean) || [];
+      const newIcons = finalAmenities.map(a => a.icon).filter(Boolean);
+      const iconsToDelete = oldIcons.filter(icon => !newIcons.includes(icon));
+      iconsToDelete.forEach(icon => {
+        const key = icon.split(".amazonaws.com/")[1];
+        if (key) deleteFromS3(key).catch(e => console.error("S3 delete error:", e.message));
+      });
+      updates.amenities = finalAmenities;
     }
 
     
-    const files = req.files?.["stayImage"] || req.files?.["images"] || [];
-    const fileArr = Array.isArray(files) ? files : [files];
+    const fileArr = Array.isArray(req.files) ? req.files.filter(f => f.fieldname === "stayImage" || f.fieldname === "images") : [];
 
     if (fileArr.length > 0 && fileArr[0]?.buffer) {
       
@@ -168,6 +252,15 @@ export const deleteStay = async (req, res) => {
       for (const imageUrl of stay.images) {
         const key = imageUrl.split(".amazonaws.com/")[1];
         if (key) await deleteFromS3(key).catch(() => { });
+      }
+    }
+
+    if (Array.isArray(stay.amenities) && stay.amenities.length > 0) {
+      for (const amenity of stay.amenities) {
+        if (amenity.icon) {
+          const key = amenity.icon.split(".amazonaws.com/")[1];
+          if (key) await deleteFromS3(key).catch(() => {});
+        }
       }
     }
 
@@ -248,7 +341,6 @@ export const getStayById = async (req, res) => {
     const stay = await stayModel.findOne({ _id: id, isActive: true }).lean();
     if (!stay) return sendNotFound(res, "Stay not found");
 
-    // Fetch reviews from centralized Review model
     const reviewModel = mongoose.model("Review");
     const reviews = await reviewModel.find({ businessId: id, businessType: 'Stay', isActive: true })
       .populate('userId', 'name avatar profilePicture')

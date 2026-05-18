@@ -15,7 +15,6 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Setup Handlebars template engine
 transporter.use(
   "compile",
   hbs({

@@ -37,8 +37,29 @@ export const createNewHotel = async (req, res) => {
 
     const parsedAddress = typeof address === "string" ? JSON.parse(address) : address || {};
     const parsedLocation = typeof location === "string" ? JSON.parse(location) : location || {};
-    const parsedAmenities = typeof amenities === "string" ? JSON.parse(amenities) : amenities || [];
+    let finalAmenities = typeof amenities === "string" ? JSON.parse(amenities) : amenities || [];
+
+    for (const key in req.body) {
+      const match = key.match(/^amenities\[(\d+)\]$/);
+      if (match) {
+        const index = parseInt(match[1], 10);
+        finalAmenities[index] = req.body[key];
+      }
+    }
+
+    finalAmenities = finalAmenities.map(am => typeof am === 'string' ? { name: am, icon: "" } : am);
     const parsedOurService = typeof ourService === "string" ? JSON.parse(ourService) : ourService || {};
+
+    let iconIndex = 0;
+    finalAmenities.forEach((am, index) => {
+      if (req.files?.amenityIconsMapped && req.files.amenityIconsMapped[index]) {
+        am.icon = req.files.amenityIconsMapped[index];
+      }
+      else if (req.files?.amenityIconsArray && req.files.amenityIconsArray[iconIndex]) {
+        am.icon = req.files.amenityIconsArray[iconIndex];
+        iconIndex++;
+      }
+    });
 
     const hotel = new hotelModel({
       name,
@@ -46,7 +67,7 @@ export const createNewHotel = async (req, res) => {
       adminId: req.admin?._id,
       address: parsedAddress,
       location: parsedLocation,
-      amenities: parsedAmenities,
+      amenities: finalAmenities,
       actualPrice: Number(actualPrice),
       discountPrice: Number(discountPrice),
       images: hotelImages,
@@ -94,15 +115,15 @@ export const getAllHotels = async (req, res) => {
 
     const reviewModel = mongoose.model("Review");
     const hotelsWithStats = await Promise.all(hotels.map(async (hotel) => {
-      const latestReviews = await reviewModel.find({ 
-        businessId: hotel._id, 
-        businessType: 'Hotel', 
-        isActive: true 
+      const latestReviews = await reviewModel.find({
+        businessId: hotel._id,
+        businessType: 'Hotel',
+        isActive: true
       })
-      .populate('userId', 'name avatar profilePicture')
-      .sort({ createdAt: -1 })
-      .limit(2)
-      .lean();
+        .populate('userId', 'name avatar profilePicture')
+        .sort({ createdAt: -1 })
+        .limit(2)
+        .lean();
 
       return {
         ...hotel,
@@ -132,7 +153,6 @@ export const getHotelById = async (req, res) => {
     const hotel = await hotelModel.findById(hotelId).populate('adminId').lean();
     if (!hotel) return sendError(res, 404, "Hotel not found");
 
-    // Fetch reviews from centralized Review model
     const reviewModel = mongoose.model("Review");
     const reviews = await reviewModel.find({ businessId: hotelId, businessType: 'Hotel', isActive: true })
       .populate('userId', 'name avatar profilePicture')
@@ -199,7 +219,7 @@ export const deleteHotels = async (req, res) => {
 
     const imagesToDelete = [];
 
-    
+
     if (Array.isArray(hotel.images) && hotel.images.length > 0) {
       hotel.images.forEach((imgUrl) => {
         const key = imgUrl.split(".amazonaws.com/")[1];
@@ -207,7 +227,7 @@ export const deleteHotels = async (req, res) => {
       });
     }
 
-    
+
     if (Array.isArray(hotel.rooms) && hotel.rooms.length > 0) {
       hotel.rooms.forEach((room) => {
         if (Array.isArray(room.images) && room.images.length > 0) {
@@ -215,6 +235,15 @@ export const deleteHotels = async (req, res) => {
             const key = imgUrl.split(".amazonaws.com/")[1];
             if (key) imagesToDelete.push(key);
           });
+        }
+      });
+    }
+
+    if (Array.isArray(hotel.amenities) && hotel.amenities.length > 0) {
+      hotel.amenities.forEach((amenity) => {
+        if (amenity.icon) {
+          const key = amenity.icon.split(".amazonaws.com/")[1];
+          if (key) imagesToDelete.push(key);
         }
       });
     }
@@ -264,15 +293,15 @@ export const getHotelByCityName = async (req, res) => {
       });
     }
 
-    
+
     const filter = {
       "address.city": {
         $regex: name,
-        $options: 'i' 
+        $options: 'i'
       }
     };
 
-    
+
     if (minPrice || maxPrice) {
       filter.$or = [];
 
@@ -291,13 +320,13 @@ export const getHotelByCityName = async (req, res) => {
       }
     }
 
-    
+
     if (amenities) {
       const amenitiesArray = Array.isArray(amenities) ? amenities : amenities.split(',');
       filter.amenities = { $in: amenitiesArray.map(a => a.trim()) };
     }
 
-    
+
     const sortOptions = {};
     switch (sortBy) {
       case 'price':
@@ -311,12 +340,12 @@ export const getHotelByCityName = async (req, res) => {
         sortOptions.name = sortOrder === 'desc' ? -1 : 1;
     }
 
-    
+
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    
+
     const hotels = await hotelModel
       .find(filter)
       .select('name description address images rooms amenities priceRange Rent ourService averageRating reviewCount')
@@ -326,22 +355,22 @@ export const getHotelByCityName = async (req, res) => {
       .limit(limitNum)
       .lean();
 
-    
+
     const totalHotels = await hotelModel.countDocuments(filter);
     const totalPages = Math.ceil(totalHotels / limitNum);
 
-    
+
     const reviewModel = mongoose.model("Review");
     const transformedHotels = await Promise.all(hotels.map(async (hotel) => {
-      const latestReviews = await reviewModel.find({ 
-        businessId: hotel._id, 
-        businessType: 'Hotel', 
-        isActive: true 
+      const latestReviews = await reviewModel.find({
+        businessId: hotel._id,
+        businessType: 'Hotel',
+        isActive: true
       })
-      .populate('userId', 'name avatar profilePicture')
-      .sort({ createdAt: -1 })
-      .limit(2)
-      .lean();
+        .populate('userId', 'name avatar profilePicture')
+        .sort({ createdAt: -1 })
+        .limit(2)
+        .lean();
 
       return {
         _id: hotel._id,
@@ -517,15 +546,15 @@ export const searchHotels = async (req, res) => {
 
     const reviewModel = mongoose.model("Review");
     const hotelsWithStats = await Promise.all(hotels.map(async (hotel) => {
-      const latestReviews = await reviewModel.find({ 
-        businessId: hotel._id, 
-        businessType: 'Hotel', 
-        isActive: true 
+      const latestReviews = await reviewModel.find({
+        businessId: hotel._id,
+        businessType: 'Hotel',
+        isActive: true
       })
-      .populate('userId', 'name avatar profilePicture')
-      .sort({ createdAt: -1 })
-      .limit(2)
-      .lean();
+        .populate('userId', 'name avatar profilePicture')
+        .sort({ createdAt: -1 })
+        .limit(2)
+        .lean();
 
       return {
         ...hotel,
@@ -603,15 +632,15 @@ export const mainSearchHotels = async (req, res) => {
 
     const reviewModel = mongoose.model("Review");
     const hotelsWithStats = await Promise.all(hotels.map(async (hotel) => {
-      const latestReviews = await reviewModel.find({ 
-        businessId: hotel._id, 
-        businessType: 'Hotel', 
-        isActive: true 
+      const latestReviews = await reviewModel.find({
+        businessId: hotel._id,
+        businessType: 'Hotel',
+        isActive: true
       })
-      .populate('userId', 'name avatar profilePicture')
-      .sort({ createdAt: -1 })
-      .limit(2)
-      .lean();
+        .populate('userId', 'name avatar profilePicture')
+        .sort({ createdAt: -1 })
+        .limit(2)
+        .lean();
 
       return {
         ...hotel,
@@ -652,39 +681,70 @@ export const updateHotel = async (req, res) => {
     const hotel = await hotelModel.findById(hotelId);
     if (!hotel) return sendError(res, "Hotel not found", "Hotel ID is invalid");
 
-    
+
     if (updateData.address && typeof updateData.address === "string") {
       updateData.address = JSON.parse(updateData.address);
     }
     if (updateData.location && typeof updateData.location === "string") {
       updateData.location = JSON.parse(updateData.location);
     }
-    if (updateData.amenities && typeof updateData.amenities === "string") {
-      updateData.amenities = JSON.parse(updateData.amenities);
+    if (updateData.amenities || Object.keys(req.body).some(k => k.startsWith('amenities['))) {
+      let finalAmenities = typeof updateData.amenities === "string" ? JSON.parse(updateData.amenities) : updateData.amenities || [];
+
+      for (const key in req.body) {
+        const match = key.match(/^amenities\[(\d+)\]$/);
+        if (match) {
+          const index = parseInt(match[1], 10);
+          finalAmenities[index] = req.body[key];
+          delete updateData[key];
+        }
+      }
+
+      finalAmenities = finalAmenities.map(am => typeof am === 'string' ? { name: am, icon: "" } : am);
+
+      let iconIndex = 0;
+      finalAmenities.forEach((am, index) => {
+        if (req.files?.amenityIconsMapped && req.files.amenityIconsMapped[index]) {
+          am.icon = req.files.amenityIconsMapped[index];
+        }
+        else if (req.files?.amenityIconsArray && req.files.amenityIconsArray[iconIndex]) {
+          am.icon = req.files.amenityIconsArray[iconIndex];
+          iconIndex++;
+        }
+      });
+
+      const oldIcons = hotel.amenities?.map(a => a.icon).filter(Boolean) || [];
+      const newIcons = finalAmenities.map(a => a.icon).filter(Boolean);
+      const iconsToDelete = oldIcons.filter(icon => !newIcons.includes(icon));
+
+      iconsToDelete.forEach(icon => {
+        const key = icon.split(".amazonaws.com/")[1];
+        if (key) deleteFromS3(key).catch(err => console.log("Failed to delete old amenity icon:", err.message));
+      });
+
+      updateData.amenities = finalAmenities;
     }
     if (updateData.ourService && typeof updateData.ourService === "string") {
       updateData.ourService = JSON.parse(updateData.ourService);
     }
 
-    
+
     if (updateData.actualPrice) updateData.actualPrice = Number(updateData.actualPrice);
     if (updateData.discountPrice) updateData.discountPrice = Number(updateData.discountPrice);
 
-    
+
     if (req.files?.hotelImages) {
-      // Delete old images from S3
       if (Array.isArray(hotel.images) && hotel.images.length > 0) {
         const imagesToDelete = hotel.images
           .map((imgUrl) => imgUrl.split(".amazonaws.com/")[1])
           .filter(Boolean);
-          
+
         if (imagesToDelete.length > 0) {
           await Promise.allSettled(
             imagesToDelete.map((key) => deleteFromS3(key))
           ).catch((err) => log.warn("Failed to delete old images:", err.message));
         }
       }
-      // Replace with new images
       updateData.images = req.files.hotelImages;
     }
 

@@ -7,7 +7,6 @@ import hallModel from "./hall.model.js";
 import stayModel from "./stay.model.js";
 import tourModel from "./tour.model.js";
 
-// Business types configuration
 const BUSINESS_TYPES = {
   HOTEL: { type: "Hotel", model: hotelModel },
   CAFE: { type: "Cafes", model: cafeModel },
@@ -73,7 +72,6 @@ const reviewSchema = new mongoose.Schema(
   }
 );
 
-// Virtual for rating text
 reviewSchema.virtual('ratingText').get(function () {
   switch (this.rating) {
     case 1: return "Terrible";
@@ -85,7 +83,6 @@ reviewSchema.virtual('ratingText').get(function () {
   }
 });
 
-// Virtuals for likes and dislikes count
 reviewSchema.virtual('likesCount').get(function () {
   return this.likes ? this.likes.length : 0;
 });
@@ -95,7 +92,6 @@ reviewSchema.virtual('dislikesCount').get(function () {
 });
 
 
-// Virtual populate for user details
 reviewSchema.virtual('user', {
   ref: 'User',
   localField: 'userId',
@@ -103,15 +99,12 @@ reviewSchema.virtual('user', {
   justOne: true
 });
 
-// Index for better query performance
 reviewSchema.index({ businessId: 1, businessType: 1 });
-// Unique index only for active reviews (Partial Index)
 reviewSchema.index(
   { userId: 1, businessId: 1, businessType: 1 },
   { unique: true, partialFilterExpression: { isActive: true } }
 );
 
-// Static method to get business rating stats
 reviewSchema.statics.getBusinessRatingStats = async function (businessId, businessType) {
   const result = await this.aggregate([
     {

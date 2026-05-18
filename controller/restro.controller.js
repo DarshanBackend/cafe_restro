@@ -58,7 +58,49 @@ export const createNewRestaurant = async (req, res) => {
     const parse = (val) => typeof val === "string" ? JSON.parse(val) : val || [];
     const parseObj = (val) => typeof val === "string" ? JSON.parse(val) : val || {};
 
-    const parsedAmenities = parse(amenities);
+    let finalAmenities = parse(amenities);
+    for (const key in req.body) {
+      const match = key.match(/^amenities\[(\d+)\]$/);
+      if (match) {
+        finalAmenities[parseInt(match[1], 10)] = req.body[key];
+      }
+    }
+    finalAmenities = finalAmenities.map(am => typeof am === 'string' ? { name: am, icon: "" } : am);
+    const amenityIconFiles = [];
+    const amenityIconMap = {};
+
+    if (Array.isArray(req.files) && req.files.length > 0) {
+      req.files.forEach((file) => {
+        if (file.fieldname === "amenityIcons") {
+          amenityIconFiles.push(file);
+        } else if (file.fieldname.startsWith("amenityIcons_") || file.fieldname.startsWith("amenityIcons-")) {
+          const match = file.fieldname.match(/^amenityIcons[-_](\d+)$/);
+          if (match) {
+            amenityIconMap[match[1]] = file;
+          } else {
+            amenityIconFiles.push(file);
+          }
+        } else if (file.fieldname.match(/^amenities\[(\d+)\]$/)) {
+          const match = file.fieldname.match(/^amenities\[(\d+)\]$/);
+          if (match) {
+            amenityIconMap[match[1]] = file;
+          }
+        }
+      });
+    }
+
+    let iconIndex = 0;
+    for (let i = 0; i < finalAmenities.length; i++) {
+      const am = finalAmenities[i];
+      if (amenityIconMap[i]) {
+        const file = amenityIconMap[i];
+        am.icon = await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+      } else if (amenityIconFiles[iconIndex]) {
+        const file = amenityIconFiles[iconIndex];
+        am.icon = await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+        iconIndex++;
+      }
+    }
     const parsedServices = parse(services);
     const parsedOperatingHours = parseObj(operatingHours);
     const parsedContact = parseObj(contact);
@@ -94,7 +136,7 @@ export const createNewRestaurant = async (req, res) => {
       lat: lat ? parseFloat(lat) : undefined,
       lng: lng ? parseFloat(lng) : undefined,
       themeCategoryId,
-      amenities: parsedAmenities,
+      amenities: finalAmenities,
       services: parsedServices,
       actualPrice,
       discountPrice,
@@ -154,7 +196,60 @@ export const updateRestaurant = async (req, res) => {
       }
     };
 
-    if (body.amenities) updateData.amenities = safeParse(body.amenities, existingRestro.amenities);
+    if (body.amenities || Object.keys(req.body).some(k => k.startsWith('amenities['))) {
+      let finalAmenities = safeParse(body.amenities, existingRestro.amenities) || [];
+      for (const key in req.body) {
+        const match = key.match(/^amenities\[(\d+)\]$/);
+        if (match) {
+          finalAmenities[parseInt(match[1], 10)] = req.body[key];
+          delete updateData[key];
+        }
+      }
+      finalAmenities = finalAmenities.map(am => typeof am === 'string' ? { name: am, icon: "" } : am);
+      const amenityIconFiles = [];
+      const amenityIconMap = {};
+
+      if (Array.isArray(req.files) && req.files.length > 0) {
+        req.files.forEach((file) => {
+          if (file.fieldname === "amenityIcons") {
+            amenityIconFiles.push(file);
+          } else if (file.fieldname.startsWith("amenityIcons_") || file.fieldname.startsWith("amenityIcons-")) {
+            const match = file.fieldname.match(/^amenityIcons[-_](\d+)$/);
+            if (match) {
+              amenityIconMap[match[1]] = file;
+            } else {
+              amenityIconFiles.push(file);
+            }
+          } else if (file.fieldname.match(/^amenities\[(\d+)\]$/)) {
+            const match = file.fieldname.match(/^amenities\[(\d+)\]$/);
+            if (match) {
+              amenityIconMap[match[1]] = file;
+            }
+          }
+        });
+      }
+
+      let iconIndex = 0;
+      for (let i = 0; i < finalAmenities.length; i++) {
+        const am = finalAmenities[i];
+        if (amenityIconMap[i]) {
+          const file = amenityIconMap[i];
+          am.icon = await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+        } else if (amenityIconFiles[iconIndex]) {
+          const file = amenityIconFiles[iconIndex];
+          am.icon = await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+          iconIndex++;
+        }
+      }
+      const oldIcons = existingRestro.amenities?.map(a => a.icon).filter(Boolean) || [];
+      const newIcons = finalAmenities.map(a => a.icon).filter(Boolean);
+      const iconsToDelete = oldIcons.filter(icon => !newIcons.includes(icon));
+      iconsToDelete.forEach(icon => {
+        const key = getS3Key(icon);
+        if (key) deleteFromS3(key).catch(e => log.error("S3 delete error:", e.message));
+      });
+      updateData.amenities = finalAmenities;
+    }
     if (body.services) updateData.services = safeParse(body.services, existingRestro.services);
     if (body.operatingHours) updateData.operatingHours = safeParse(body.operatingHours, existingRestro.operatingHours);
     if (body.contact) updateData.contact = safeParse(body.contact, existingRestro.contact);
@@ -255,7 +350,6 @@ export const getSingleRestro = async (req, res) => {
       isFavorite = watchlist ? watchlist.restro.some(rid => rid.toString() === restro._id.toString()) : false;
     }
 
-    // Fetch reviews from centralized Review model
     const reviewModel = mongoose.model("Review");
     const reviews = await reviewModel.find({ businessId: id, businessType: 'Restro', isActive: true })
       .populate('userId', 'name avatar profilePicture')
@@ -319,6 +413,15 @@ export const deleteRestaurant = async (req, res) => {
       for (const url of restro.images) {
         const key = getS3Key(url);
         if (key) await deleteFromS3(key);
+      }
+    }
+
+    if (Array.isArray(restro.amenities) && restro.amenities.length > 0) {
+      for (const amenity of restro.amenities) {
+        if (amenity.icon) {
+          const key = getS3Key(amenity.icon);
+          if (key) await deleteFromS3(key);
+        }
       }
     }
 

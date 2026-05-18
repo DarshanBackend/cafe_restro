@@ -33,7 +33,6 @@ const staySchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
-  // pricePerHour kept for backward-compat, mapped from actualPrice
   pricePerHour: {
     type: Number,
     min: 0,
@@ -41,8 +40,8 @@ const staySchema = new mongoose.Schema({
   },
 
   amenities: [{
-    type: String,
-    trim: true
+    name: { type: String },
+    icon: { type: String }
   }],
   images: [String],
   isActive: {

@@ -132,11 +132,11 @@ indexRouter.get("/cafe/:cafeId", AdminAuth, getCafeBookings);
 indexRouter.put("/cafe/updateBookingStatus/:id", AdminAuth, updateBookingStatus);
 indexRouter.put("/cafe/updatePaymentStatus/:id", AdminAuth, updatePaymentStatus);
 
-indexRouter.post("/createNewRestro", AdminAuth, upload.array("images", 10), validateRestroDuplicate, createNewRestaurant);
+indexRouter.post("/createNewRestro", AdminAuth, upload.any(), validateRestroDuplicate, createNewRestaurant);
 indexRouter.get("/getAllRestros", OptionalUserAuth, getAllRestos);
 indexRouter.get("/getRestroById/:id", OptionalUserAuth, getSingleRestro);
 
-indexRouter.put("/updateRestro/:id", AdminAuth, upload.array("images", 10), updateRestaurant);
+indexRouter.put("/updateRestro/:id", AdminAuth, upload.any(), updateRestaurant);
 indexRouter.post("/addRestroImage/:id/images", AdminAuth, upload.array('images', 10), addRestroImages);
 indexRouter.delete("/removeRestroImage/:id/images/:imageUrl", AdminAuth, removeRestroImage);
 indexRouter.delete("/deleteRestro/:id", AdminAuth, deleteRestaurant);
@@ -161,11 +161,7 @@ indexRouter.get('/getPopularHalls', OptionalUserAuth, getPopularHalls);
 indexRouter.get('/getHallById/:id', OptionalUserAuth, getHallById);
 indexRouter.post("/preview/billing/:hallId", UserAuth, getPreviewBillingOfHall)
 
-indexRouter.post("/createHall", AdminAuth, upload.fields([
-  { name: "image", maxCount: 1 },
-  { name: "featured", maxCount: 1 },
-  { name: "images", maxCount: 1 }
-]), createHall);
+indexRouter.post("/createHall", AdminAuth, upload.any(), createHall);
 
 indexRouter.put('/updateHall/:id', AdminAuth, upload.any(), updateHall);
 indexRouter.delete('/deleteHall/:id', AdminAuth, deleteHall);
@@ -243,8 +239,8 @@ indexRouter.put("/updateOffer/:id", AdminAuth, upload.single("backgroundImage"),
 indexRouter.delete("/deleteOffer/:id", AdminAuth, deleteOffer);
 indexRouter.patch("/toggleOfferStatus/:id", AdminAuth, toggleOfferStatus);
 
-indexRouter.post("/createStay", AdminAuth, upload.fields([{ name: "stayImage", maxCount: 5 }, { name: "images", maxCount: 5 }]), createStay);
-indexRouter.put("/updateStay/:id", AdminAuth, upload.fields([{ name: "stayImage", maxCount: 5 }, { name: "images", maxCount: 5 }]), updateStay);
+indexRouter.post("/createStay", AdminAuth, upload.any(), createStay);
+indexRouter.put("/updateStay/:id", AdminAuth, upload.any(), updateStay);
 indexRouter.delete("/deleteStay/:id", AdminAuth, deleteStay);
 indexRouter.get("/getAdminStays", AdminAuth, getAdminStays);
 

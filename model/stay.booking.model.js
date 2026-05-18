@@ -24,7 +24,6 @@ const stayBookingSchema = new mongoose.Schema({
     ref: "Stay",
     required: true
   },
-  // Booking date (single day – hourly stay)
   date: {
     type: Date,
     required: true

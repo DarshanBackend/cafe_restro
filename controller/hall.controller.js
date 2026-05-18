@@ -29,10 +29,6 @@ export const createHall = async (req, res) => {
 
     const adminId = req.admin._id;
 
-    const isUser = await userModel.findOne({ _id: adminId });
-    if (isUser) {
-      return sendBadRequest(res, "You'r user OOPS!")
-    }
 
     if (!name?.trim()) return sendBadRequest(res, "Hall name is required");
     if (!actualPrice || actualPrice <= 0) return sendBadRequest(res, "Valid actual price is required");
@@ -43,7 +39,7 @@ export const createHall = async (req, res) => {
       return sendBadRequest(res, "A hall with this name already exists");
     }
 
-    const imageFile = req.files?.image?.[0] || req.files?.featured?.[0] || req.files?.images?.[0];
+    const imageFile = Array.isArray(req.files) ? req.files.find(f => f.fieldname === "image" || f.fieldname === "featured" || f.fieldname === "images") : null;
 
     const imageUrl = imageFile
       ? await uploadToS3(
@@ -56,6 +52,50 @@ export const createHall = async (req, res) => {
 
     const parsed = (v, fallback = []) => (typeof v === "string" ? JSON.parse(v) : v || fallback);
 
+    let finalAmenities = parsed(amenities);
+    for (const key in req.body) {
+      const match = key.match(/^amenities\[(\d+)\]$/);
+      if (match) {
+        finalAmenities[parseInt(match[1], 10)] = req.body[key];
+      }
+    }
+    finalAmenities = finalAmenities.map(am => typeof am === 'string' ? { name: am, icon: "" } : am);
+    const amenityIconFiles = [];
+    const amenityIconMap = {};
+
+    if (Array.isArray(req.files) && req.files.length > 0) {
+      req.files.forEach((file) => {
+        if (file.fieldname === "amenityIcons") {
+          amenityIconFiles.push(file);
+        } else if (file.fieldname.startsWith("amenityIcons_") || file.fieldname.startsWith("amenityIcons-")) {
+          const match = file.fieldname.match(/^amenityIcons[-_](\d+)$/);
+          if (match) {
+            amenityIconMap[match[1]] = file;
+          } else {
+            amenityIconFiles.push(file);
+          }
+        } else if (file.fieldname.match(/^amenities\[(\d+)\]$/)) {
+          const match = file.fieldname.match(/^amenities\[(\d+)\]$/);
+          if (match) {
+            amenityIconMap[match[1]] = file;
+          }
+        }
+      });
+    }
+
+    let iconIndex = 0;
+    for (let i = 0; i < finalAmenities.length; i++) {
+      const am = finalAmenities[i];
+      if (amenityIconMap[i]) {
+        const file = amenityIconMap[i];
+        am.icon = await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+      } else if (amenityIconFiles[iconIndex]) {
+        const file = amenityIconFiles[iconIndex];
+        am.icon = await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+        iconIndex++;
+      }
+    }
+
     const hall = new hallModel({
       adminId: adminId,
       name: name.trim(),
@@ -67,7 +107,7 @@ export const createHall = async (req, res) => {
       type: type?.trim() || "Banquet Hall",
       category: category?.trim() || "Standard",
       capacity: Number(capacity) || 100,
-      amenities: parsed(amenities),
+      amenities: finalAmenities,
       image: imageUrl,
       ourService: parsed(ourService, {
         connectVieCall: null,
@@ -88,7 +128,6 @@ export const createHall = async (req, res) => {
       ).catch(err => log.warn("Failed to update admin halls:", err.message));
     }
 
-    console.log(`Hall created: ${hall.name}`);
     return sendSuccess(res, "Hall created successfully", hall);
   } catch (error) {
     console.error(`createHall Error: ${error.message}`);
@@ -347,14 +386,19 @@ export const updateHall = async (req, res) => {
       });
     }
 
-    if (hall.createdBy.toString() !== req.admin._id.toString()) {
+    const reqAdminId = req.admin._id || req.admin.id;
+
+    const isOwner = (hall.createdBy && hall.createdBy.toString() === reqAdminId?.toString()) ||
+      (hall.adminId && hall.adminId.toString() === reqAdminId?.toString());
+
+    if (!isOwner) {
       return res.status(403).json({
         success: false,
         message: "Not authorized to update this hall"
       });
     }
 
-    const imageFile = req.files?.image?.[0] || req.files?.featured?.[0] || req.files?.images?.[0];
+    const imageFile = Array.isArray(req.files) ? req.files.find(f => f.fieldname === "image" || f.fieldname === "featured" || f.fieldname === "images") : null;
 
     if (imageFile) {
       if (hall.image) {
@@ -392,7 +436,59 @@ export const updateHall = async (req, res) => {
     if (type !== undefined) hall.type = type;
     if (category !== undefined) hall.category = category;
     if (capacity !== undefined) hall.capacity = Number(capacity);
-    if (amenities !== undefined) hall.amenities = parseArray(amenities) || hall.amenities;
+    if (amenities !== undefined || Object.keys(req.body).some(k => k.startsWith('amenities['))) {
+      let finalAmenities = parseArray(amenities) || hall.amenities || [];
+      for (const key in req.body) {
+        const match = key.match(/^amenities\[(\d+)\]$/);
+        if (match) {
+          finalAmenities[parseInt(match[1], 10)] = req.body[key];
+        }
+      }
+      finalAmenities = finalAmenities.map(am => typeof am === 'string' ? { name: am, icon: "" } : am);
+      const amenityIconFiles = [];
+      const amenityIconMap = {};
+
+      if (Array.isArray(req.files) && req.files.length > 0) {
+        req.files.forEach((file) => {
+          if (file.fieldname === "amenityIcons") {
+            amenityIconFiles.push(file);
+          } else if (file.fieldname.startsWith("amenityIcons_") || file.fieldname.startsWith("amenityIcons-")) {
+            const match = file.fieldname.match(/^amenityIcons[-_](\d+)$/);
+            if (match) {
+              amenityIconMap[match[1]] = file;
+            } else {
+              amenityIconFiles.push(file);
+            }
+          } else if (file.fieldname.match(/^amenities\[(\d+)\]$/)) {
+            const match = file.fieldname.match(/^amenities\[(\d+)\]$/);
+            if (match) {
+              amenityIconMap[match[1]] = file;
+            }
+          }
+        });
+      }
+
+      let iconIndex = 0;
+      for (let i = 0; i < finalAmenities.length; i++) {
+        const am = finalAmenities[i];
+        if (amenityIconMap[i]) {
+          const file = amenityIconMap[i];
+          am.icon = await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+        } else if (amenityIconFiles[iconIndex]) {
+          const file = amenityIconFiles[iconIndex];
+          am.icon = await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+          iconIndex++;
+        }
+      }
+      const oldIcons = hall.amenities?.map(a => a.icon).filter(Boolean) || [];
+      const newIcons = finalAmenities.map(a => a.icon).filter(Boolean);
+      const iconsToDelete = oldIcons.filter(icon => !newIcons.includes(icon));
+      iconsToDelete.forEach(icon => {
+        const key = icon.split(".amazonaws.com/")[1];
+        if (key) deleteFromS3(key).catch(e => console.error("S3 delete error:", e.message));
+      });
+      hall.amenities = finalAmenities;
+    }
     if (isAvailable !== undefined) hall.isAvailable = isAvailable === 'true' || isAvailable === true;
     if (ourService !== undefined) hall.ourService = parseArray(ourService) || hall.ourService;
 
@@ -444,6 +540,15 @@ export const deleteHall = async (req, res) => {
     if (hall.image) {
       const key = hall.image.split(".amazonaws.com/")[1];
       if (key) imagesToDelete.push(key);
+    }
+
+    if (Array.isArray(hall.amenities) && hall.amenities.length > 0) {
+      hall.amenities.forEach((amenity) => {
+        if (amenity.icon) {
+          const key = amenity.icon.split(".amazonaws.com/")[1];
+          if (key) imagesToDelete.push(key);
+        }
+      });
     }
 
     if (imagesToDelete.length > 0) {
@@ -524,15 +629,15 @@ export const getPreviewBillingOfHall = async (req, res) => {
 
     if (couponCode) {
       const coupon = await coupanModel.findOne({ couponCode: couponCode.toUpperCase() });
-      
+
       if (!coupon) {
         return sendBadRequest(res, "Invalid coupon code");
       }
-      
+
       if (!coupon.isActive) {
         return sendBadRequest(res, "This coupon is no longer active");
       }
-      
+
       if (coupon.couponExpire && new Date(coupon.couponExpire) < new Date()) {
         return sendBadRequest(res, "This coupon has expired");
       }

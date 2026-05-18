@@ -6,9 +6,6 @@ import { getRatingText, formatReviewResponse, formatReviewsResponse } from "../u
 import log from "../utils/logger.js";
 
 
-// Removed local getRatingText and replaced with utility import
-
-
 const updateBusinessRatingStats = async (businessType, businessId) => {
     const businessConfig = Object.values(BUSINESS_TYPES).find(config => config.type === businessType);
     if (!businessConfig) return;
@@ -81,15 +78,12 @@ export const addReview = async (req, res) => {
             media,
         });
 
-        // Populate user details for consistent response
         const populatedReview = await reviewModel.findById(review._id)
             .populate("userId", "name avatar profilePicture")
             .lean();
 
-        // Use utility to format response
         const finalReview = formatReviewResponse(populatedReview, null);
 
-        // Update stats in background
         updateBusinessRatingStats(businessType, businessId).catch(err => log.error("Update stats error: " + err.message));
 
         return sendSuccess(res, "Review added successfully", finalReview);

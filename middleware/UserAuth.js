@@ -16,10 +16,8 @@ export const UserAuth = (req, res, next) => {
       return sendBadRequest(res, "Authorization token missing");
     }
 
-    // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECET);
 
-    // Attach user info to request
     req.user = {
       _id: decoded._id,
       name: decoded.name,
@@ -27,7 +25,7 @@ export const UserAuth = (req, res, next) => {
       role: decoded.role
     };
 
-    next(); // proceed to the next middleware / route handler
+    next();
   } catch (error) {
     return sendError(res, error, "Invalid or expired token");
   }
@@ -35,17 +33,15 @@ export const UserAuth = (req, res, next) => {
 
 export const isSuperAdmin = (req, res, next) => {
   try {
-    // Make sure user info exists
     if (!req.user) {
       return sendBadRequest(res, "User not authenticated");
     }
 
-    // Check role
     if (req.user.role !== "superadmin") {
       return sendBadRequest(res, "Access denied: Superadmin only");
     }
 
-    next(); // proceed if superadmin
+    next();
   } catch (error) {
     return sendBadRequest(res, "Error checking user role");
   }

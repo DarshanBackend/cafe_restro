@@ -26,7 +26,7 @@ const tourSchema = new mongoose.Schema({
     type: [String],
     default: []
   },
-  emiOption: { // Fixed typo from emiOPtion to emiOption
+  emiOption: {
     type: String,
     default: null,
   },
@@ -38,7 +38,7 @@ const tourSchema = new mongoose.Schema({
     type: Number,
     default: null
   },
-  contactNo: { // Fixed typo from contatcNo to contactNo
+  contactNo: {
     type: String,
     default: null
   },

@@ -63,8 +63,53 @@ export const createNewCafe = async (req, res) => {
       });
     }
 
-    const parsedAmenities =
-      typeof amenities === "string" ? JSON.parse(amenities) : amenities || [];
+    let finalAmenities = typeof amenities === "string" ? JSON.parse(amenities) : amenities || [];
+    
+    for (const key in req.body) {
+      const match = key.match(/^amenities\[(\d+)\]$/);
+      if (match) {
+        const index = parseInt(match[1], 10);
+        finalAmenities[index] = req.body[key];
+      }
+    }
+
+    finalAmenities = finalAmenities.map(am => typeof am === 'string' ? { name: am, icon: "" } : am);
+
+    const amenityIconFiles = [];
+    const amenityIconMap = {};
+
+    if (Array.isArray(req.files) && req.files.length > 0) {
+      req.files.forEach((file) => {
+        if (file.fieldname === "amenityIcons") {
+          amenityIconFiles.push(file);
+        } else if (file.fieldname.startsWith("amenityIcons_") || file.fieldname.startsWith("amenityIcons-")) {
+          const match = file.fieldname.match(/^amenityIcons[-_](\d+)$/);
+          if (match) {
+            amenityIconMap[match[1]] = file;
+          } else {
+            amenityIconFiles.push(file);
+          }
+        } else if (file.fieldname.match(/^amenities\[(\d+)\]$/)) {
+          const match = file.fieldname.match(/^amenities\[(\d+)\]$/);
+          if (match) {
+            amenityIconMap[match[1]] = file;
+          }
+        }
+      });
+    }
+
+    let iconIndex = 0;
+    for (let i = 0; i < finalAmenities.length; i++) {
+      const am = finalAmenities[i];
+      if (amenityIconMap[i]) {
+        const file = amenityIconMap[i];
+        am.icon = await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+      } else if (amenityIconFiles[iconIndex]) {
+        const file = amenityIconFiles[iconIndex];
+        am.icon = await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+        iconIndex++;
+      }
+    }
 
     const parsedServices =
       typeof services === "string" ? JSON.parse(services) : services || [];
@@ -166,7 +211,7 @@ export const createNewCafe = async (req, res) => {
       },
       themeCategoryId,
       images: imageUrls,
-      amenities: parsedAmenities,
+      amenities: finalAmenities,
       services: parsedServices,
       operatingHours: parsedOperatingHours,
       contact: {
@@ -343,7 +388,6 @@ export const getCafeById = async (req, res) => {
 
     const isOpen = cafe.isOpenNow();
 
-    // Fetch reviews from centralized Review model
     const reviewModel = mongoose.model("Review");
     const reviews = await reviewModel.find({ businessId: id, businessType: 'Cafes', isActive: true })
       .populate('userId', 'name avatar profilePicture')
@@ -459,7 +503,66 @@ export const updateCafe = async (req, res) => {
       }
     };
 
-    if (body.amenities) updateData.amenities = safeParse(body.amenities, existingCafe.amenities);
+    if (body.amenities || Object.keys(req.body).some(k => k.startsWith('amenities['))) {
+      let finalAmenities = safeParse(body.amenities, existingCafe.amenities) || [];
+      
+      for (const key in req.body) {
+        const match = key.match(/^amenities\[(\d+)\]$/);
+        if (match) {
+          const index = parseInt(match[1], 10);
+          finalAmenities[index] = req.body[key];
+          delete updateData[key];
+        }
+      }
+
+      finalAmenities = finalAmenities.map(am => typeof am === 'string' ? { name: am, icon: "" } : am);
+      
+      const amenityIconFiles = [];
+      const amenityIconMap = {};
+
+      if (Array.isArray(req.files) && req.files.length > 0) {
+        req.files.forEach((file) => {
+          if (file.fieldname === "amenityIcons") {
+            amenityIconFiles.push(file);
+          } else if (file.fieldname.startsWith("amenityIcons_") || file.fieldname.startsWith("amenityIcons-")) {
+            const match = file.fieldname.match(/^amenityIcons[-_](\d+)$/);
+            if (match) {
+              amenityIconMap[match[1]] = file;
+            } else {
+              amenityIconFiles.push(file);
+            }
+          } else if (file.fieldname.match(/^amenities\[(\d+)\]$/)) {
+            const match = file.fieldname.match(/^amenities\[(\d+)\]$/);
+            if (match) {
+              amenityIconMap[match[1]] = file;
+            }
+          }
+        });
+      }
+
+      let iconIndex = 0;
+      for (let i = 0; i < finalAmenities.length; i++) {
+        const am = finalAmenities[i];
+        if (amenityIconMap[i]) {
+          const file = amenityIconMap[i];
+          am.icon = await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+        } else if (amenityIconFiles[iconIndex]) {
+          const file = amenityIconFiles[iconIndex];
+          am.icon = await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+          iconIndex++;
+        }
+      }
+
+      const oldIcons = existingCafe.amenities?.map(a => a.icon).filter(Boolean) || [];
+      const newIcons = finalAmenities.map(a => a.icon).filter(Boolean);
+      const iconsToDelete = oldIcons.filter(icon => !newIcons.includes(icon));
+      iconsToDelete.forEach(icon => {
+        const key = icon.split(".amazonaws.com/")[1];
+        if (key) deleteFromS3(key).catch(e => console.log(e.message));
+      });
+
+      updateData.amenities = finalAmenities;
+    }
     if (body.services) updateData.services = safeParse(body.services, existingCafe.services);
     if (body.operatingHours) updateData.operatingHours = safeParse(body.operatingHours, existingCafe.operatingHours);
     if (body.contact) updateData.contact = safeParse(body.contact, existingCafe.contact);
@@ -549,6 +652,15 @@ export const deleteCafe = async (req, res) => {
       cafe.images.forEach((imgUrl) => {
         const key = imgUrl.split(".amazonaws.com/")[1];
         if (key) imagesToDelete.push(key);
+      });
+    }
+
+    if (Array.isArray(cafe.amenities) && cafe.amenities.length > 0) {
+      cafe.amenities.forEach((amenity) => {
+        if (amenity.icon) {
+          const key = amenity.icon.split(".amazonaws.com/")[1];
+          if (key) imagesToDelete.push(key);
+        }
       });
     }
 

@@ -44,14 +44,13 @@ const hallSchema = new mongoose.Schema({
     min: 1
   },
   amenities: [{
-    type: String,
-    trim: true
+    name: { type: String },
+    icon: { type: String }
   }],
   image: {
     type: String,
     default: null
   },
-  // FIXED: Use adminId (not adminid)
   adminId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Admin',

@@ -28,7 +28,6 @@ try {
     console.error("❌ Firebase Initialization Error:", error.message);
 }
 
-// Helper to ensure all data values are strings (FCM v1 API requirement)
 const stringifyData = (data) => {
     const result = {};
     for (const [key, value] of Object.entries(data)) {
@@ -122,7 +121,6 @@ export const sendMulticastNotification = async (tokens, title, body, data = {}) 
         return false;
     }
 
-    // Filter out any null/undefined/empty tokens
     const validTokens = tokens.filter(t => t && typeof t === 'string' && t.trim().length > 0);
     if (validTokens.length === 0) {
         console.error("❌ No valid tokens after filtering.");

@@ -63,7 +63,10 @@ const restaurantSchema = new mongoose.Schema(
       saturday: { open: String, close: String },
       sunday: { open: String, close: String }
     },
-    amenities: [{ type: String }],
+    amenities: [{
+      name: { type: String },
+      icon: { type: String }
+    }],
     services: [{ type: String }],
     images: [{ type: String }],
     averageRating: { type: Number, default: 0 },
