@@ -111,12 +111,16 @@ export const getMyWatchlist = async (req, res) => {
       .populate("event");
 
     if (!watchlist) {
-      return sendSuccess(res, "No watchlist found", {
-        hotel: [],
-        cafe: [],
-        restaurant: [],
-        hall: [],
-        event: []
+      return res.status(200).json({
+        success: true,
+        message: "No watchlist found",
+        data: {
+          hotel: [],
+          cafe: [],
+          restaurant: [],
+          hall: [],
+          event: []
+        }
       });
     }
 
@@ -130,8 +134,8 @@ export const getMyWatchlist = async (req, res) => {
     });
 
   } catch (error) {
+    console.log("from watchlist controllergetmywatchlist", error.message);
     log.error(error.message);
-    return sendError(res, 500, "Failed to fetch watchlist", error.message);
   }
 };
 
@@ -141,22 +145,22 @@ export const removeWatchlistItem = async (req, res) => {
     const userId = req.user?._id;
 
     if (!hotel && !cafe && !restro && !hall && !event) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "At least one item (hotel, cafe, restro, hall, event) is required to remove" 
+      return res.status(400).json({
+        success: false,
+        message: "At least one item (hotel, cafe, restro, hall, event) is required to remove"
       });
     }
 
-    
+
     const update = { $pull: {} };
-    
+
     if (hotel) update.$pull.hotels = hotel;
     if (cafe) update.$pull.cafe = cafe;
     if (restro) update.$pull.restro = restro;
     if (hall) update.$pull.hall = hall;
     if (event) update.$pull.event = event;
 
-    
+
     const watchlist = await watchListModel.findOneAndUpdate(
       { userId },
       update,
@@ -164,9 +168,9 @@ export const removeWatchlistItem = async (req, res) => {
     ).populate("hotels cafe restro hall event");
 
     if (!watchlist) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Watchlist not found for this user" 
+      return res.status(404).json({
+        success: false,
+        message: "Watchlist not found for this user"
       });
     }
 
@@ -190,7 +194,7 @@ export const getWatchlistByCategory = async (req, res) => {
     const userId = req.user?._id;
 
     const validCategories = ['hotels', 'cafe', 'restro', 'hall', 'event'];
-    
+
     if (!validCategories.includes(category)) {
       return res.status(400).json({
         success: false,
