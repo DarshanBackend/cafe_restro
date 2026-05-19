@@ -626,6 +626,56 @@ export const previewCafeBooking = async (req, res) => {
   }
 };
 
+export const confirmCafeBookingPayment = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { id } = req.params; 
+    const { transactionId, paymentMethod = "Stripe" } = req.body;
+
+    if (!transactionId) {
+      return res.status(400).json({ success: false, message: "transactionId is required" });
+    }
+
+    const booking = await cafeBookingModel.findOne({ _id: id, userId });
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found or unauthorized" });
+    }
+
+    if (booking.bookingStatus === "Cancelled" || booking.bookingStatus === "Refunded" || booking.bookingStatus === "cancelled") {
+      return res.status(400).json({ success: false, message: "Booking is already cancelled or refunded" });
+    }
+
+    if (booking.payment.paymentStatus === "completed" || booking.payment.paymentStatus === "confirmed") {
+      return res.status(200).json({ success: true, message: "Payment is already completed", data: booking });
+    }
+
+    booking.payment.paymentStatus = "completed";
+    booking.payment.paymentMethod = paymentMethod;
+    booking.payment.transactionId = transactionId;
+    booking.payment.paymentDate = new Date();
+    booking.bookingStatus = "Upcoming";
+
+    await booking.save();
+
+    await booking.populate("cafeId", "name images location");
+
+    await sendNotification({
+      userId,
+      title: `Cafe Booking Confirmed! ☕`,
+      message: `Your payment was successful and your booking at ${booking.cafeId?.name} is confirmed. Booking ID: ${booking.bookingId}`,
+      image: booking.cafeId?.images?.[0] || null,
+      type: "CAFE_BOOKING",
+      reference: { bookingId: booking._id, cafeId: booking.cafeId?._id }
+    }).catch((err) => console.error("Notification Error:", err.message));
+
+    return res.status(200).json({ success: true, message: "Booking payment confirmed successfully", data: booking });
+
+  } catch (error) {
+    console.error("confirmCafeBookingPayment error:", error);
+    return res.status(500).json({ success: false, message: "Failed to confirm payment", error: error.message });
+  }
+};
+
 export const updateBookingStatus = async (req, res) => {
   try {
     const adminId = req.admin?._id;

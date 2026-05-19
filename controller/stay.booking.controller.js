@@ -632,7 +632,7 @@ export const updateStayPaymentStatus = async (req, res) => {
 
 
       if (newPaymentStatus === "completed" || newPaymentStatus === "confirmed") {
-        booking.bookingStatus = "completed";
+        booking.bookingStatus = "confirmed";
         booking.payment.paymentDate = new Date();
       } else if (newPaymentStatus === "cancelled" || newPaymentStatus === "failed") {
         booking.bookingStatus = "cancelled";
@@ -645,6 +645,56 @@ export const updateStayPaymentStatus = async (req, res) => {
   } catch (error) {
     console.error("UpdateStayPaymentStatus error:", error);
     return sendError(res, 500, "Failed to update payment status", error.message);
+  }
+};
+
+export const confirmStayBookingPayment = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { id } = req.params; 
+    const { transactionId, paymentMethod = "Stripe" } = req.body;
+
+    if (!transactionId) {
+      return sendBadRequest(res, "transactionId is required");
+    }
+
+    const booking = await stayBookingModel.findOne({ _id: id, userId });
+    if (!booking) {
+      return sendNotFound(res, "Booking not found or unauthorized");
+    }
+
+    if (booking.bookingStatus === "cancelled" || booking.bookingStatus === "refunded") {
+      return sendBadRequest(res, "Booking is already cancelled or refunded");
+    }
+
+    if (booking.payment.paymentStatus === "completed" || booking.payment.paymentStatus === "confirmed") {
+      return sendSuccess(res, "Payment is already completed", [booking]);
+    }
+
+    booking.payment.paymentStatus = "completed";
+    booking.payment.paymentMethod = paymentMethod;
+    booking.payment.transactionId = transactionId;
+    booking.payment.paymentDate = new Date();
+    booking.bookingStatus = "upcoming";
+
+    await booking.save();
+
+    await booking.populate("stayId", "name images address city");
+
+    await sendNotification({
+      userId,
+      title: `Stay Booking Confirmed! 🏨`,
+      message: `Your payment was successful and your stay at ${booking.stayId.name} on ${new Date(booking.date).toLocaleDateString()} is confirmed. Booking ID: ${booking.bookingId}`,
+      image: booking.stayId.images?.[0] || null,
+      type: "STAY_BOOKING",
+      reference: { bookingId: booking._id, stayId: booking.stayId._id }
+    }).catch((err) => console.error("Notification Error:", err.message));
+
+    return sendSuccess(res, "Booking payment confirmed successfully", [booking]);
+
+  } catch (error) {
+    console.error("confirmStayBookingPayment error:", error);
+    return sendError(res, "Failed to confirm payment", error);
   }
 };
 
