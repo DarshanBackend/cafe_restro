@@ -30,7 +30,7 @@ export const addNewFeaturedEvent = async (req, res) => {
       adminId,
       addresss,
       typesOfEvent: eventTypesArray,
-      rating: rating || 5,
+      averageRating: rating || 5,
       experienceYears: experienceYears || 10,
       totalFollowers: totalFollowers || "50k+",
       sectionType: 'Featured'

@@ -261,7 +261,7 @@ export const getHallById = async (req, res) => {
       type: hall.type,
       category: hall.category,
       capacity: hall.capacity,
-      rating: averageRating,
+      averageRating: averageRating,
       reviewCount: totalCount,
       amenities: hall.amenities || [],
       image: hall.image || null,
@@ -302,11 +302,11 @@ export const getPopularHalls = async (req, res) => {
     const popularHalls = await hallModel
       .find({
         isAvailable: true,
-        rating: { $gte: 4 }
+        averageRating: { $gte: 4 }
       })
-      .select('name actualPrice discountPrice location type category capacity amenities image rating reviewCount')
+      .select('name actualPrice discountPrice location type category capacity amenities image averageRating reviewCount')
       .sort({
-        rating: -1,
+        averageRating: -1,
         reviewCount: -1,
         createdAt: -1
       })
@@ -316,7 +316,7 @@ export const getPopularHalls = async (req, res) => {
     if (popularHalls.length === 0) {
       const recentHalls = await hallModel
         .find({ isAvailable: true })
-        .select('name actualPrice discountPrice location type category capacity amenities image rating reviewCount')
+        .select('name actualPrice discountPrice location type category capacity amenities image averageRating reviewCount')
         .sort({ createdAt: -1 })
         .limit(parseInt(limit))
         .populate('adminId', 'name email');

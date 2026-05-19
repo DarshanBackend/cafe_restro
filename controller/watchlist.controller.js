@@ -10,7 +10,7 @@ const formatWatchlistResponse = (watchlist) => {
       _id: item._id,
       name: item.name || item.eventName || item.title || "",
       image: item.images?.[0] || item.image || item.eventImage || "",
-      rating: item.averageRating || item.rating || 0,
+      averageRating: item.averageRating || item.rating || 0,
       price: 0,
       currency: "INR",
       location: ""

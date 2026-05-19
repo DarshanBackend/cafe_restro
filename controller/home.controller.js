@@ -460,7 +460,7 @@ export const getCoffeeDates = async (req, res) => {
         id: obj._id,
         name: obj.name,
         image: image,
-        rating: obj.averageRating || 0,
+        averageRating: obj.averageRating || 0,
         location: obj.location?.city || "",
         type: "cafe",
         isFavorite: favoriteCafeIds.includes(obj._id.toString())
@@ -591,7 +591,7 @@ export const getLuxuryStays = async (req, res) => {
         name: obj.name,
         location: obj.address?.city || city || "Unknown",
         image: obj.images && obj.images.length > 0 ? obj.images[0] : "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
-        rating: obj.averageRating || 5,
+        averageRating: obj.averageRating || 5,
         price: obj.priceRange?.min || obj.Rent || 0
       };
     };

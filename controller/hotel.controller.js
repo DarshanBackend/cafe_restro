@@ -385,10 +385,6 @@ export const getHotelByCityName = async (req, res) => {
           currency: "INR"
         },
         services: hotel.ourService || {},
-        rating: {
-          average: hotel.averageRating || 0,
-          totalReviews: hotel.reviewCount || 0
-        },
         reviewCount: hotel.reviewCount || 0,
         averageRating: hotel.averageRating || 0,
         reviews: formatReviewsResponse(latestReviews, req.user?._id),
