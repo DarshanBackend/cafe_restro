@@ -73,9 +73,6 @@ const fetchMultipleImagesForPlace = async (placeName, maxImages = 3) => {
 };
 
 
-const fetchOptimizedImage = async (query) => {
-  return "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=800";
-};
 
 
 const fetchOptimizedAttractions = async (cityName) => {
@@ -163,17 +160,32 @@ export const getCityByCountry = async (req, res) => {
   try {
     const { country } = req.params;
 
-
-    const hotelCities = await hotelModel.distinct("address.city", { 
-      "address.country": { $regex: new RegExp(`^${country}$`, "i") } 
-    });
-    const allCities = hotelCities.filter(Boolean);
-
-
-    const cityData = await Promise.all(allCities.map(async (name) => {
-      const image = await fetchOptimizedImage(`${name} city ${country} tourism`);
-      return { name, image };
-    }));
+    const cityData = await hotelModel.aggregate([
+      {
+        $match: {
+          "address.country": { $regex: new RegExp(`^${country}$`, "i") },
+          "address.city": { $exists: true, $ne: "" }
+        }
+      },
+      {
+        $sort: {
+          cityImage: -1
+        }
+      },
+      {
+        $group: {
+          _id: "$address.city",
+          cityImage: { $first: "$cityImage" }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          name: "$_id",
+          image: { $ifNull: ["$cityImage", null] }
+        }
+      }
+    ]);
 
     return sendSuccess(res, "Cities fetched successfully", cityData);
   } catch (error) {
@@ -219,6 +231,7 @@ export const bestPlaceByCity = async (req, res) => {
         longitude: h.location?.lng,
         images: h.images || [],
         primaryImage: h.images?.[0] || null,
+        cityImage: h.cityImage || null,
         description: h.description,
         isDatabaseEntry: true
       })),
@@ -373,6 +386,7 @@ export const getHotelByCity = async (req, res) => {
       cityName: h.address?.city,
       averageRating: h.averageRating || 0,
       image: h.images?.[0] || null,
+      cityImage: h.cityImage || null,
       address: `${h.address?.street || ''}, ${h.address?.city || ''}`.replace(/^, |, $/g, '').trim(),
       price: h.discountPrice || h.actualPrice,
       priceLabel: "Per Night",

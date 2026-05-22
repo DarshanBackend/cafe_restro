@@ -22,6 +22,7 @@ export const createNewHotel = async (req, res) => {
       actualPrice,
       discountPrice,
       ourService,
+      cityImage,
     } = req.body;
 
     if (!name || !description) {
@@ -30,9 +31,14 @@ export const createNewHotel = async (req, res) => {
 
     const hotelImages = req.files?.hotelImages || [];
     const roomImagesByIndex = req.files?.roomImages || {};
+    const finalCityImage = req.files?.cityImage || cityImage;
 
     if (hotelImages.length === 0) {
       return sendBadRequest(res, "Please upload at least one hotel image");
+    }
+
+    if (!finalCityImage) {
+      return sendBadRequest(res, "City image is required");
     }
 
     const parsedAddress = typeof address === "string" ? JSON.parse(address) : address || {};
@@ -71,6 +77,7 @@ export const createNewHotel = async (req, res) => {
       actualPrice: Number(actualPrice),
       discountPrice: Number(discountPrice),
       images: hotelImages,
+      cityImage: finalCityImage,
       ourService: {
         connectVieCall: parsedOurService.connectVieCall || null,
         connectVieMessage: parsedOurService.connectVieMessage || null,
@@ -219,6 +226,10 @@ export const deleteHotels = async (req, res) => {
 
     const imagesToDelete = [];
 
+    if (hotel.cityImage) {
+      const key = hotel.cityImage.split(".amazonaws.com/")[1];
+      if (key) imagesToDelete.push(key);
+    }
 
     if (Array.isArray(hotel.images) && hotel.images.length > 0) {
       hotel.images.forEach((imgUrl) => {
@@ -348,7 +359,7 @@ export const getHotelByCityName = async (req, res) => {
 
     const hotels = await hotelModel
       .find(filter)
-      .select('name description address images rooms amenities priceRange Rent ourService averageRating reviewCount')
+      .select('name description address images rooms amenities priceRange Rent ourService averageRating reviewCount cityImage')
       .populate('adminId', 'name email contactNo')
       .sort(sortOptions)
       .skip(skip)
@@ -378,6 +389,7 @@ export const getHotelByCityName = async (req, res) => {
         description: hotel.description,
         address: hotel.address,
         images: hotel.images || [],
+        cityImage: hotel.cityImage || null,
         amenities: hotel.amenities || [],
         pricing: {
           rent: hotel.Rent,
@@ -616,7 +628,7 @@ export const mainSearchHotels = async (req, res) => {
     };
 
     const hotels = await hotelModel.find(query)
-      .select("name description address images actualPrice discountPrice averageRating reviewCount amenities")
+      .select("name description address images actualPrice discountPrice averageRating reviewCount amenities cityImage")
       .limit(20)
       .lean();
 
@@ -727,8 +739,6 @@ export const updateHotel = async (req, res) => {
 
     if (updateData.actualPrice) updateData.actualPrice = Number(updateData.actualPrice);
     if (updateData.discountPrice) updateData.discountPrice = Number(updateData.discountPrice);
-
-
     if (req.files?.hotelImages) {
       if (Array.isArray(hotel.images) && hotel.images.length > 0) {
         const imagesToDelete = hotel.images
@@ -742,6 +752,16 @@ export const updateHotel = async (req, res) => {
         }
       }
       updateData.images = req.files.hotelImages;
+    }
+
+    if (req.files?.cityImage) {
+      if (hotel.cityImage) {
+        const key = hotel.cityImage.split(".amazonaws.com/")[1];
+        if (key) {
+          await deleteFromS3(key).catch((err) => log.warn("Failed to delete old city image:", err.message));
+        }
+      }
+      updateData.cityImage = req.files.cityImage;
     }
 
     const updatedHotel = await hotelModel.findByIdAndUpdate(

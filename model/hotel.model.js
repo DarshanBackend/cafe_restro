@@ -56,6 +56,7 @@ const hotelSchema = new mongoose.Schema(
     },
     averageRating: { type: Number, default: 0 },
     reviewCount: { type: Number, default: 0 },
+    cityImage: { type: String, required: [true, "City image is required"] },
   },
   { timestamps: true }
 );
