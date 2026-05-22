@@ -312,15 +312,15 @@ export const getAllRestos = async (req, res) => {
 
     const reviewModel = mongoose.model("Review");
     const restrosWithStats = await Promise.all(restros.map(async (restro) => {
-      const latestReviews = await reviewModel.find({ 
-        businessId: restro._id, 
-        businessType: 'Restro', 
-        isActive: true 
+      const latestReviews = await reviewModel.find({
+        businessId: restro._id,
+        businessType: 'Restro',
+        isActive: true
       })
-      .populate('userId', 'name avatar profilePicture')
-      .sort({ createdAt: -1 })
-      .limit(2)
-      .lean();
+        .populate('userId', 'name avatar profilePicture')
+        .sort({ createdAt: -1 })
+        .limit(2)
+        .lean();
 
       return {
         ...restro,
@@ -447,15 +447,15 @@ export const searchRestaurants = async (req, res) => {
     const results = await restroModel.find(query).lean();
     const reviewModel = mongoose.model("Review");
     const resultsWithStats = await Promise.all(results.map(async (restro) => {
-      const latestReviews = await reviewModel.find({ 
-        businessId: restro._id, 
-        businessType: 'Restro', 
-        isActive: true 
+      const latestReviews = await reviewModel.find({
+        businessId: restro._id,
+        businessType: 'Restro',
+        isActive: true
       })
-      .populate('userId', 'name avatar profilePicture')
-      .sort({ createdAt: -1 })
-      .limit(2)
-      .lean();
+        .populate('userId', 'name avatar profilePicture')
+        .sort({ createdAt: -1 })
+        .limit(2)
+        .lean();
 
       return {
         ...restro,
