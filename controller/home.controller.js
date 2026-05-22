@@ -70,6 +70,7 @@ export const WhatsNew = async (req, res) => {
       return {
         ...obj,
         type,
+        businessType: type,
         images: normalizedImages
       };
     };

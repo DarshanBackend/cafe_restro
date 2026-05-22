@@ -11,12 +11,9 @@ export const getFilteredResults = async (req, res) => {
         const {
             businessType,
             city,
-            minPrice,
-            maxPrice,
             rating,
             amenities,
             sortBy,
-            sortOrder = 'desc',
             page = 1,
             limit = 10
         } = req.query;
@@ -55,12 +52,6 @@ export const getFilteredResults = async (req, res) => {
             query[cityField] = { $regex: city, $options: 'i' };
         }
 
-        if (minPrice || maxPrice) {
-            query[priceField] = {};
-            if (minPrice) query[priceField].$gte = Number(minPrice);
-            if (maxPrice) query[priceField].$lte = Number(maxPrice);
-        }
-
         if (rating) {
             query[ratingField] = { $gte: Number(rating) };
         }
@@ -78,12 +69,19 @@ export const getFilteredResults = async (req, res) => {
         }
 
         let sortOptions = {};
-        if (sortBy === 'price') {
-            sortOptions[priceField] = sortOrder === 'desc' ? -1 : 1;
-        } else if (sortBy === 'rating') {
-            sortOptions[ratingField] = sortOrder === 'desc' ? -1 : 1;
-        } else if (sortBy === 'newest') {
-            sortOptions.createdAt = -1;
+        if (sortBy) {
+            const cleanSortBy = sortBy.toLowerCase().trim();
+            if (cleanSortBy === 'a-z') {
+                sortOptions.name = 1;
+            } else if (cleanSortBy === 'z-a') {
+                sortOptions.name = -1;
+            } else if (cleanSortBy === 'high-low' || cleanSortBy === 'high-to-low' || cleanSortBy === 'high_to_low') {
+                sortOptions[priceField] = -1;
+            } else if (cleanSortBy === 'low-high' || cleanSortBy === 'low-to-high' || cleanSortBy === 'low_to_high' || cleanSortBy === 'low to aay') {
+                sortOptions[priceField] = 1;
+            } else {
+                sortOptions.createdAt = -1;
+            }
         } else {
             sortOptions.createdAt = -1;
         }
