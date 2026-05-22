@@ -34,6 +34,7 @@ export const getFilteredResults = async (req, res) => {
                 cityField = "address.city";
                 break;
             case 'cafe':
+            case 'cafes':
                 model = cafeModel;
                 priceField = "pricing.actualPrice";
                 cityField = "location.city";
@@ -102,7 +103,7 @@ export const getFilteredResults = async (req, res) => {
                 const bType = businessType.toLowerCase();
                 const watchlistArray = bType === 'hotel' ? watchlist.hotels :
                     bType === 'restro' ? watchlist.restro :
-                        bType === 'cafe' ? watchlist.cafe :
+                        (bType === 'cafe' || bType === 'cafes') ? watchlist.cafe :
                             bType === 'hall' ? watchlist.hall : [];
 
                 const favoriteIds = watchlistArray.map(id => id.toString());
@@ -151,6 +152,7 @@ export const getFilterOptions = async (req, res) => {
                 cityField = "address.city";
                 break;
             case 'cafe':
+            case 'cafes':
                 model = cafeModel;
                 cityField = "location.city";
                 activeQuery.status = 'active';
