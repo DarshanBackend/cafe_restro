@@ -34,7 +34,7 @@ import { createNotification, deleteMyNotification, deleteNotification, getAllNot
 import { createStay, deleteStay, getAllStays, getAdminStays, getStayById, updateStay } from '../controller/stay.controller.js';
 import { createThemeCategory, deleteThemeCategory, getAllThemeCategories, getThemeCategory, getThemesByArea, updateThemeCategory } from '../controller/themeCategory.controller.js';
 import { getMyBookingsUnified } from '../controller/my.bookings.controller.js';
-import { getFilteredResults } from '../controller/filter.controller.js';
+import { getFilteredResults, getFilterOptions } from '../controller/filter.controller.js';
 import { createFaq, deleteFaq, getAllFaqs, getFaqById, updateFaq } from '../controller/faq.controller.js';
 
 const indexRouter = express.Router();
@@ -50,6 +50,7 @@ indexRouter.get("/getUserById/:id", getUserById);
 indexRouter.put("/updateUser/:id", upload.single("avatar"), updateUser);
 
 indexRouter.get("/filter", OptionalUserAuth, getFilteredResults);
+indexRouter.get("/filter/options", getFilterOptions);
 
 indexRouter.post("/addAddress", UserAuth, addUserAddress);
 indexRouter.get("/getAddresses", UserAuth, getUserAddresses);

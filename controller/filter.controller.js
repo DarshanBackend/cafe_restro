@@ -131,3 +131,65 @@ export const getFilteredResults = async (req, res) => {
         return sendError(res, "Internal server error while filtering", error);
     }
 };
+
+export const getFilterOptions = async (req, res) => {
+    try {
+        const { businessType } = req.query;
+        
+        if (!businessType) {
+            return sendBadRequest(res, "businessType is required (Hotel, Cafe, Restro, Stay)");
+        }
+
+        let model;
+        let cityField;
+        let amenitiesField = "amenities.name";
+        let activeQuery = {};
+
+        switch (businessType.toLowerCase()) {
+            case 'hotel':
+                model = hotelModel;
+                cityField = "address.city";
+                break;
+            case 'cafe':
+                model = cafeModel;
+                cityField = "location.city";
+                activeQuery.status = 'active';
+                break;
+            case 'restro':
+                model = restroModel;
+                cityField = "city";
+                activeQuery.status = 'active';
+                break;
+            case 'stay':
+                model = stayModel;
+                cityField = "city";
+                activeQuery.isActive = true;
+                break;
+            default:
+                return sendBadRequest(res, "Invalid businessType. Must be Hotel, Cafe, Restro, or Stay");
+        }
+
+        const cityQuery = { ...activeQuery };
+        cityQuery[cityField] = { $ne: null, $exists: true };
+        let cities = await model.distinct(cityField, cityQuery);
+
+        const amenitiesQuery = { ...activeQuery };
+        amenitiesQuery[amenitiesField] = { $ne: null, $exists: true };
+        let amenitiesList = await model.distinct(amenitiesField, amenitiesQuery);
+
+        cities = cities.map(c => c.trim()).filter(Boolean);
+        cities = [...new Set(cities)].sort();
+
+        amenitiesList = amenitiesList.map(a => a.trim()).filter(Boolean);
+        amenitiesList = [...new Set(amenitiesList)].sort();
+
+        return sendSuccess(res, `Filter options for ${businessType} retrieved successfully`, {
+            cities,
+            amenities: amenitiesList
+        });
+
+    } catch (error) {
+        console.error("Get Filter Options Error:", error);
+        return sendError(res, "Internal server error while fetching filter options", error);
+    }
+};
