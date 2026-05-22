@@ -798,7 +798,7 @@ export const searchCafes = async (req, res) => {
         { "location.city": searchRegex },
         { "location.state": searchRegex },
         { "location.country": searchRegex },
-        { amenities: { $in: [searchRegex] } },
+        { "amenities.name": { $in: [searchRegex] } },
         { services: { $in: [searchRegex] } }
       ]
     };

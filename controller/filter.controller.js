@@ -67,7 +67,7 @@ export const getFilteredResults = async (req, res) => {
 
         if (amenities) {
             const amenitiesArray = Array.isArray(amenities) ? amenities : amenities.split(',');
-            query.amenities = { $all: amenitiesArray.map(a => a.trim()) };
+            query["amenities.name"] = { $all: amenitiesArray.map(a => a.trim()) };
         }
 
         if (businessType.toLowerCase() === 'hotel') {
@@ -103,10 +103,10 @@ export const getFilteredResults = async (req, res) => {
             if (watchlist) {
                 const bType = businessType.toLowerCase();
                 const watchlistArray = bType === 'hotel' ? watchlist.hotels :
-                                       bType === 'restro' ? watchlist.restro :
-                                       bType === 'cafe' ? watchlist.cafe :
-                                       bType === 'hall' ? watchlist.hall : [];
-                
+                    bType === 'restro' ? watchlist.restro :
+                        bType === 'cafe' ? watchlist.cafe :
+                            bType === 'hall' ? watchlist.hall : [];
+
                 const favoriteIds = watchlistArray.map(id => id.toString());
                 results.forEach(item => {
                     item.isFavorite = favoriteIds.includes(item._id.toString());
