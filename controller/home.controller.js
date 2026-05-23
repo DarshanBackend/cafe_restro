@@ -218,6 +218,7 @@ const getIndianTrendingCities = async (limit = 8) => {
           hotelCount: { $sum: 1 },
           avgRating: { $avg: "$averageRating" },
           sampleImages: { $first: "$images" },
+          sampleHotelId: { $first: "$_id" },
           sampleHotelName: { $first: "$name" },
           cityImage: { $first: "$cityImage" }
         }
@@ -273,7 +274,7 @@ const formatIndianCityData = (data, source) => {
   const stateName = data._id.state || getIndianStateFromCity(cityName);
 
   return {
-    id: `${cityName.toLowerCase().replace(/\s+/g, '-')}-${stateName.toLowerCase().replace(/\s+/g, '-')}`,
+    _id: data.sampleHotelId,
     name: cityName,
     state: stateName,
     country: "India",
@@ -377,7 +378,6 @@ export const getCoffeeDates = async (req, res) => {
       const normalized = normalizeImages(c, "cafe");
       return {
         ...normalized,
-        id: c._id,
         image: normalized.images?.featured,
         location: c.location?.city || "",
         isFavorite: favoriteCafeIds.includes(c._id.toString())
