@@ -10,7 +10,7 @@ import { uploadToS3, deleteFromS3 } from "../middleware/uploadS3.js";
 export const sendOtpEmail = async (email, name, otp) => {
   
   const info = await transporter.sendMail({
-    from: `"Cafe & Restro" <${process.env.EMAIL_USER}>`,
+    from: `"Cafe & Restro" <${process.env.SMTP_EMAIL || process.env.EMAIL_USER || "hit.kalathiyainfotech@gmail.com"}>`,
     to: email,
     subject: "Your Password Reset OTP",
     template: "otpEmail",

@@ -14,8 +14,7 @@ config();
 const PORT = process.env.PORT || 8000;
 const DB_URL = process.env.DB_URL
 
-// dns.setServers(['8.8.8.8', '8.8.4.4']);
-dns.setServers(['1.1.1.1', '8.8.8.8']);
+// dns.setServers(['1.1.1.1', '8.8.8.8']);
 
 const app = express();
 connectDB(DB_URL);
