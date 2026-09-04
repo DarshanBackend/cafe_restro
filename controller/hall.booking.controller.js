@@ -6,6 +6,7 @@ import userModel from "../model/user.model.js";
 import WalletTransactionModel from "../model/wallet.transaction.model.js";
 import { v4 as uuidv4 } from "uuid";
 import coupanModel from "../model/coupan.model.js";
+import { sendNotification } from "../utils/notification.utils.js";
 
 export const createHallBooking = async (req, res) => {
   try {
@@ -94,15 +95,15 @@ export const createHallBooking = async (req, res) => {
 
     if (couponCode) {
       const coupon = await coupanModel.findOne({ couponCode: couponCode.toUpperCase() });
-      
+
       if (!coupon) {
         return sendBadRequest(res, "Invalid coupon code");
       }
-      
+
       if (!coupon.isActive) {
         return sendBadRequest(res, "This coupon is no longer active");
       }
-      
+
       if (coupon.couponExpire && new Date(coupon.couponExpire) < new Date()) {
         return sendBadRequest(res, "This coupon has expired");
       }
@@ -163,7 +164,7 @@ export const createHallBooking = async (req, res) => {
         couponCode: couponDetails ? couponDetails.code : null,
       },
       bookingId: generatedBookingId,
-      bookingStatus: (normalizedPaymentMethod === "Wallet" || paymentStatus === "completed" || paymentStatus === "confirmed") ? 'Upcoming' : 'pending',
+      bookingStatus: (normalizedPaymentMethod === "Wallet" || paymentStatus === "completed" || paymentStatus === "confirmed") ? 'Confirmed' : 'pending',
       payment: {
         paymentStatus: (normalizedPaymentMethod === "Wallet") ? 'completed' : paymentStatus,
         paymentMethod: normalizedPaymentMethod,
@@ -404,7 +405,7 @@ export const updateHallPaymentStatus = async (req, res) => {
       if (paymentMethod) booking.payment.paymentMethod = paymentMethod;
 
       if (newPaymentStatus === "completed" || newPaymentStatus === "confirmed") {
-        booking.bookingStatus = "Upcoming";
+        booking.bookingStatus = "Confirmed";
         booking.payment.paymentDate = paymentDate ? new Date(paymentDate) : new Date();
       } else if (newPaymentStatus === "cancelled" || newPaymentStatus === "failed") {
         booking.bookingStatus = "Cancelled";
@@ -417,6 +418,56 @@ export const updateHallPaymentStatus = async (req, res) => {
   } catch (error) {
     console.error("Update Hall Payment Status Error:", error);
     return sendError(res, "Failed to update payment status", error);
+  }
+};
+
+export const confirmHallBookingPayment = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { id } = req.params;
+    const { transactionId, paymentMethod = "Stripe" } = req.body;
+
+    if (!transactionId) {
+      return sendBadRequest(res, "transactionId is required");
+    }
+
+    const booking = await hallBookingModel.findOne({ _id: id, userId });
+    if (!booking) {
+      return sendNotFound(res, "Booking not found or unauthorized");
+    }
+
+    if (booking.bookingStatus === "Cancelled" || booking.bookingStatus === "Refunded" || booking.bookingStatus === "cancelled") {
+      return sendBadRequest(res, "Booking is already cancelled or refunded");
+    }
+
+    if (booking.payment.paymentStatus === "completed" || booking.payment.paymentStatus === "confirmed") {
+      return sendSuccess(res, "Payment is already completed", [booking]);
+    }
+
+    booking.payment.paymentStatus = "completed";
+    booking.payment.paymentMethod = paymentMethod;
+    booking.payment.transactionId = transactionId;
+    booking.payment.paymentDate = new Date();
+    booking.bookingStatus = "Upcoming";
+
+    await booking.save();
+
+    await booking.populate("hallId", "name image location");
+
+    await sendNotification({
+      userId,
+      title: `Hall Booking Confirmed! 🏛️`,
+      message: `Your payment was successful and your booking at ${booking.hallId?.name} is confirmed. Booking ID: ${booking.bookingId || booking._id.toString().slice(-10).toUpperCase()}`,
+      image: booking.hallId?.image || null,
+      type: "HALL_BOOKING",
+      reference: { bookingId: booking._id, hallId: booking.hallId?._id }
+    }).catch((err) => console.error("Notification Error:", err.message));
+
+    return sendSuccess(res, "Booking payment confirmed successfully", [booking]);
+
+  } catch (error) {
+    console.error("confirmHallBookingPayment error:", error);
+    return sendError(res, "Failed to confirm payment", error);
   }
 };
 

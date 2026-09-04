@@ -11,12 +11,9 @@ export const getFilteredResults = async (req, res) => {
         const {
             businessType,
             city,
-            minPrice,
-            maxPrice,
             rating,
             amenities,
             sortBy,
-            sortOrder = 'desc',
             page = 1,
             limit = 10
         } = req.query;
@@ -37,6 +34,7 @@ export const getFilteredResults = async (req, res) => {
                 cityField = "address.city";
                 break;
             case 'cafe':
+            case 'cafes':
                 model = cafeModel;
                 priceField = "pricing.actualPrice";
                 cityField = "location.city";
@@ -55,19 +53,13 @@ export const getFilteredResults = async (req, res) => {
             query[cityField] = { $regex: city, $options: 'i' };
         }
 
-        if (minPrice || maxPrice) {
-            query[priceField] = {};
-            if (minPrice) query[priceField].$gte = Number(minPrice);
-            if (maxPrice) query[priceField].$lte = Number(maxPrice);
-        }
-
         if (rating) {
             query[ratingField] = { $gte: Number(rating) };
         }
 
         if (amenities) {
             const amenitiesArray = Array.isArray(amenities) ? amenities : amenities.split(',');
-            query.amenities = { $all: amenitiesArray.map(a => a.trim()) };
+            query["amenities.name"] = { $all: amenitiesArray.map(a => a.trim()) };
         }
 
         if (businessType.toLowerCase() === 'hotel') {
@@ -78,12 +70,19 @@ export const getFilteredResults = async (req, res) => {
         }
 
         let sortOptions = {};
-        if (sortBy === 'price') {
-            sortOptions[priceField] = sortOrder === 'desc' ? -1 : 1;
-        } else if (sortBy === 'rating') {
-            sortOptions[ratingField] = sortOrder === 'desc' ? -1 : 1;
-        } else if (sortBy === 'newest') {
-            sortOptions.createdAt = -1;
+        if (sortBy) {
+            const cleanSortBy = sortBy.toLowerCase().trim();
+            if (cleanSortBy === 'a-z') {
+                sortOptions.name = 1;
+            } else if (cleanSortBy === 'z-a') {
+                sortOptions.name = -1;
+            } else if (cleanSortBy === 'high-low' || cleanSortBy === 'high-to-low' || cleanSortBy === 'high_to_low') {
+                sortOptions[priceField] = -1;
+            } else if (cleanSortBy === 'low-high' || cleanSortBy === 'low-to-high' || cleanSortBy === 'low_to_high' || cleanSortBy === 'low to aay') {
+                sortOptions[priceField] = 1;
+            } else {
+                sortOptions.createdAt = -1;
+            }
         } else {
             sortOptions.createdAt = -1;
         }
@@ -103,10 +102,10 @@ export const getFilteredResults = async (req, res) => {
             if (watchlist) {
                 const bType = businessType.toLowerCase();
                 const watchlistArray = bType === 'hotel' ? watchlist.hotels :
-                                       bType === 'restro' ? watchlist.restro :
-                                       bType === 'cafe' ? watchlist.cafe :
-                                       bType === 'hall' ? watchlist.hall : [];
-                
+                    bType === 'restro' ? watchlist.restro :
+                        (bType === 'cafe' || bType === 'cafes') ? watchlist.cafe :
+                            bType === 'hall' ? watchlist.hall : [];
+
                 const favoriteIds = watchlistArray.map(id => id.toString());
                 results.forEach(item => {
                     item.isFavorite = favoriteIds.includes(item._id.toString());
@@ -131,5 +130,68 @@ export const getFilteredResults = async (req, res) => {
     } catch (error) {
         console.error("Filter Error:", error);
         return sendError(res, "Internal server error while filtering", error);
+    }
+};
+
+export const getFilterOptions = async (req, res) => {
+    try {
+        const { businessType } = req.query;
+        
+        if (!businessType) {
+            return sendBadRequest(res, "businessType is required (Hotel, Cafe, Restro, Stay)");
+        }
+
+        let model;
+        let cityField;
+        let amenitiesField = "amenities.name";
+        let activeQuery = {};
+
+        switch (businessType.toLowerCase()) {
+            case 'hotel':
+                model = hotelModel;
+                cityField = "address.city";
+                break;
+            case 'cafe':
+            case 'cafes':
+                model = cafeModel;
+                cityField = "location.city";
+                activeQuery.status = 'active';
+                break;
+            case 'restro':
+                model = restroModel;
+                cityField = "city";
+                activeQuery.status = 'active';
+                break;
+            case 'stay':
+                model = stayModel;
+                cityField = "city";
+                activeQuery.isActive = true;
+                break;
+            default:
+                return sendBadRequest(res, "Invalid businessType. Must be Hotel, Cafe, Restro, or Stay");
+        }
+
+        const cityQuery = { ...activeQuery };
+        cityQuery[cityField] = { $ne: null, $exists: true };
+        let cities = await model.distinct(cityField, cityQuery);
+
+        const amenitiesQuery = { ...activeQuery };
+        amenitiesQuery[amenitiesField] = { $ne: null, $exists: true };
+        let amenitiesList = await model.distinct(amenitiesField, amenitiesQuery);
+
+        cities = cities.map(c => c.trim()).filter(Boolean);
+        cities = [...new Set(cities)].sort();
+
+        amenitiesList = amenitiesList.map(a => a.trim()).filter(Boolean);
+        amenitiesList = [...new Set(amenitiesList)].sort();
+
+        return sendSuccess(res, `Filter options for ${businessType} retrieved successfully`, {
+            cities,
+            amenities: amenitiesList
+        });
+
+    } catch (error) {
+        console.error("Get Filter Options Error:", error);
+        return sendError(res, "Internal server error while fetching filter options", error);
     }
 };

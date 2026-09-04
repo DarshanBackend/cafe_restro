@@ -1,5 +1,4 @@
 import axios from "axios";
-import * as cheerio from "cheerio";
 import pLimit from "p-limit";
 import { sendError, sendSuccess } from "../utils/responseUtils.js";
 import hotelModel from "../model/hotel.model.js";
@@ -9,21 +8,9 @@ import watchListModel from "../model/watchlist.model.js";
 
 const cityCache = new Map();
 const attractionsCache = new Map();
-const placeDetailCache = new Map();
-const imageCache = new Map();
 const CACHE_TTL = 30 * 60 * 1000;
 const MAX_CACHE_SIZE = 100;
 
-
-const http = axios.create({
-  timeout: 15000,
-  headers: {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    "Accept": "application/json",
-    "Accept-Encoding": "identity",
-  },
-  maxRedirects: 5,
-});
 
 const OVERPASS_URLS = [
   "https://overpass-api.de/api/interpreter",
@@ -76,113 +63,16 @@ const setCached = (cache, key, data) => {
 };
 
 
-const fetchDuckDuckGoImage = async (query) => {
-  const cacheKey = `ddg:${query}`;
-  const cached = getCached(imageCache, cacheKey);
-  if (cached) return cached;
-
-  try {
-    const url = `https://duckduckgo.com/i.js?l=us-en&o=json&q=${encodeURIComponent(query)}`;
-    const res = await http.get(url);
-    const image = res.data?.results?.[0]?.image || null;
-    if (image) setCached(imageCache, cacheKey, image);
-    return image;
-  } catch {
-    return null;
-  }
-};
-
-const fetchBingImage = async (query, width = 512, height = 512) => {
-  const cacheKey = `bing:${query}`;
-  const cached = getCached(imageCache, cacheKey);
-  if (cached) return cached;
-
-  try {
-    const url = `https://www.bing.com/images/search?q=${encodeURIComponent(query)}`;
-    const res = await http.get(url);
-    const $ = cheerio.load(res.data);
-
-    const first = $("a.iusc img.mimg").first();
-    let src = first.attr("src") || first.attr("data-src") || $("img").first().attr("src");
-
-    if (src && src.startsWith("http") && src.includes("tse")) {
-      src = src.replace("&w=*", `&w=${width}`).replace("&h=*", `&h=${height}`);
-      if (!src.includes("&w=")) src += `&w=${width}&h=${height}`;
-    }
-    if (src) setCached(imageCache, cacheKey, src);
-    return src || null;
-  } catch {
-    return null;
-  }
-};
-
-const fetchGoogleImage = async (query) => {
-  const cacheKey = `google:${query}`;
-  const cached = getCached(imageCache, cacheKey);
-  if (cached) return cached;
-
-  try {
-    const url = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`;
-    const res = await http.get(url);
-    const $ = cheerio.load(res.data);
-    const image = $("img").eq(1).attr("src") || null;
-    if (image) setCached(imageCache, cacheKey, image);
-    return image;
-  } catch {
-    return null;
-  }
-};
-
-
 const fetchMultipleImagesForPlace = async (placeName, maxImages = 3) => {
-  const cacheKey = `images:${placeName}:${maxImages}`;
-  const cached = getCached(imageCache, cacheKey);
-  if (cached) return cached;
-
-  try {
-    const timeout = 5000;
-    const sources = [
-      () => fetchBingImage(placeName),
-      () => fetchDuckDuckGoImage(placeName),
-      () => fetchGoogleImage(placeName)
-    ];
-
-    const images = [];
-
-
-    for (const fetchFn of sources) {
-      if (images.length >= maxImages) break;
-
-      try {
-        const img = await Promise.race([
-          fetchFn(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeout))
-        ]);
-
-        if (img && img.startsWith('http') && !images.includes(img)) {
-          images.push(img);
-        }
-      } catch (err) {
-        continue;
-      }
-    }
-
-    const result = images.slice(0, maxImages);
-    if (result.length > 0) {
-      setCached(imageCache, cacheKey, result);
-    }
-    return result;
-  } catch (error) {
-    console.error(`Error fetching images for ${placeName}:`, error);
-    return [];
-  }
+  const staticImages = [
+    "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=800",
+    "https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=800",
+    "https://images.unsplash.com/photo-1449034446853-66c86144b0ad?w=800"
+  ];
+  return staticImages.slice(0, maxImages);
 };
 
 
-const fetchOptimizedImage = async (query) => {
-  const images = await fetchMultipleImagesForPlace(query, 1);
-  return images.length > 0 ? images[0] : null;
-};
 
 
 const fetchOptimizedAttractions = async (cityName) => {
@@ -270,17 +160,32 @@ export const getCityByCountry = async (req, res) => {
   try {
     const { country } = req.params;
 
-
-    const hotelCities = await hotelModel.distinct("address.city", { 
-      "address.country": { $regex: new RegExp(`^${country}$`, "i") } 
-    });
-    const allCities = hotelCities.filter(Boolean);
-
-
-    const cityData = await Promise.all(allCities.map(async (name) => {
-      const image = await fetchOptimizedImage(`${name} city ${country} tourism`);
-      return { name, image };
-    }));
+    const cityData = await hotelModel.aggregate([
+      {
+        $match: {
+          "address.country": { $regex: new RegExp(`^${country}$`, "i") },
+          "address.city": { $exists: true, $ne: "" }
+        }
+      },
+      {
+        $sort: {
+          cityImage: -1
+        }
+      },
+      {
+        $group: {
+          _id: "$address.city",
+          cityImage: { $first: "$cityImage" }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          name: "$_id",
+          image: { $ifNull: ["$cityImage", null] }
+        }
+      }
+    ]);
 
     return sendSuccess(res, "Cities fetched successfully", cityData);
   } catch (error) {
@@ -321,11 +226,12 @@ export const bestPlaceByCity = async (req, res) => {
         name: h.name,
         locationName: h.address?.country || "Global",
         cityName: h.address?.city,
-        rating: h.averageRating || 0,
+        averageRating: h.averageRating || 0,
         latitude: h.location?.lat,
         longitude: h.location?.lng,
         images: h.images || [],
         primaryImage: h.images?.[0] || null,
+        cityImage: h.cityImage || null,
         description: h.description,
         isDatabaseEntry: true
       })),
@@ -335,7 +241,7 @@ export const bestPlaceByCity = async (req, res) => {
         name: s.name,
         locationName: s.country || "India",
         cityName: s.city,
-        rating: s.rating || 4.5,
+        averageRating: s.rating || 4.5,
         latitude: null,
         longitude: null,
         images: s.images || [],
@@ -375,7 +281,7 @@ export const bestPlaceByCity = async (req, res) => {
               name: attr.name,
               locationName: country || cityName,
               cityName: cityName,
-              rating: 4.5,
+              averageRating: 4.5,
               latitude: attr.lat,
               longitude: attr.lon,
               images,
@@ -478,8 +384,9 @@ export const getHotelByCity = async (req, res) => {
       name: h.name,
       locationName: h.address?.country || "Global",
       cityName: h.address?.city,
-      rating: h.averageRating || 0,
+      averageRating: h.averageRating || 0,
       image: h.images?.[0] || null,
+      cityImage: h.cityImage || null,
       address: `${h.address?.street || ''}, ${h.address?.city || ''}`.replace(/^, |, $/g, '').trim(),
       price: h.discountPrice || h.actualPrice,
       priceLabel: "Per Night",

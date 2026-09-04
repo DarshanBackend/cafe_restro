@@ -623,6 +623,56 @@ export const updateHotelBookingStatus = async (req, res) => {
   }
 };
 
+export const confirmHotelBookingPayment = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { id } = req.params; 
+    const { transactionId, paymentMethod = "Stripe" } = req.body;
+
+    if (!transactionId) {
+      return sendError(res, 400, "transactionId is required");
+    }
+
+    const booking = await hotelBookingModel.findOne({ _id: id, userId });
+    if (!booking) {
+      return sendError(res, 404, "Booking not found or unauthorized");
+    }
+
+    if (booking.bookingStatus === "cancelled" || booking.bookingStatus === "refunded") {
+      return sendError(res, 400, "Booking is already cancelled or refunded");
+    }
+
+    if (booking.payment.paymentStatus === "completed" || booking.payment.paymentStatus === "confirmed") {
+      return sendSuccess(res, "Payment is already completed", [booking]);
+    }
+
+    booking.payment.paymentStatus = "completed";
+    booking.payment.paymentMethod = paymentMethod;
+    booking.payment.transactionId = transactionId;
+    booking.payment.paymentDate = new Date();
+    booking.bookingStatus = "upcoming";
+
+    await booking.save();
+
+    await booking.populate("hotelId", "name images address city");
+
+    await sendNotification({
+      userId,
+      title: `Hotel Booking Confirmed! 🏨`,
+      message: `Your payment was successful and your booking at ${booking.hotelId?.name} is confirmed. Booking ID: ${booking.bookingId || booking._id.toString().slice(-10).toUpperCase()}`,
+      image: booking.hotelId?.images?.[0] || null,
+      type: "HOTEL_BOOKING",
+      reference: { bookingId: booking._id, hotelId: booking.hotelId?._id }
+    }).catch((err) => console.error("Notification Error:", err.message));
+
+    return sendSuccess(res, "Booking payment confirmed successfully", [booking]);
+
+  } catch (error) {
+    log.error("confirmHotelBookingPayment error: " + error.message);
+    return sendError(res, 500, "Failed to confirm payment", error.message);
+  }
+};
+
 export const cancelHotelBooking = async (req, res) => {
   try {
     const userId = req.user._id;

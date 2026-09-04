@@ -32,10 +32,21 @@ export const addReview = async (req, res) => {
             return sendBadRequest(res, "Valid rating (1-5) is required");
         }
 
-        const validType = Object.values(BUSINESS_TYPES).find(config => config.type === businessType);
+        if (!businessType) {
+            return sendBadRequest(res, "businessType is required");
+        }
+
+        const validType = Object.values(BUSINESS_TYPES).find(config => {
+            const typeLower = config.type.toLowerCase();
+            const inputLower = businessType.toLowerCase();
+            return typeLower === inputLower || (inputLower === 'cafe' && typeLower === 'cafes') || (inputLower === 'cafes' && typeLower === 'cafe');
+        });
+
         if (!validType) {
             return sendBadRequest(res, "Invalid business type");
         }
+
+        const normalizedBusinessType = validType.type;
 
         
         const business = await validType.model.findById(businessId);
@@ -45,7 +56,7 @@ export const addReview = async (req, res) => {
         const existingReview = await reviewModel.findOne({
             userId,
             businessId,
-            businessType,
+            businessType: normalizedBusinessType,
             isActive: true
         });
 
@@ -72,7 +83,7 @@ export const addReview = async (req, res) => {
         const review = await reviewModel.create({
             userId,
             businessId,
-            businessType,
+            businessType: normalizedBusinessType,
             rating: Math.round(rating),
             comment: comment || "",
             media,
@@ -84,7 +95,7 @@ export const addReview = async (req, res) => {
 
         const finalReview = formatReviewResponse(populatedReview, null);
 
-        updateBusinessRatingStats(businessType, businessId).catch(err => log.error("Update stats error: " + err.message));
+        updateBusinessRatingStats(normalizedBusinessType, businessId).catch(err => log.error("Update stats error: " + err.message));
 
         return sendSuccess(res, "Review added successfully", finalReview);
 
@@ -133,7 +144,14 @@ export const getBusinessReviews = async (req, res) => {
 
         const query = { businessId, isActive: true };
         if (rating) query.rating = Number(rating);
-        if (businessType) query.businessType = businessType;
+        if (businessType) {
+            const validType = Object.values(BUSINESS_TYPES).find(config => {
+                const typeLower = config.type.toLowerCase();
+                const inputLower = businessType.toLowerCase();
+                return typeLower === inputLower || (inputLower === 'cafe' && typeLower === 'cafes') || (inputLower === 'cafes' && typeLower === 'cafe');
+            });
+            query.businessType = validType ? validType.type : businessType;
+        }
 
         const reviews = await reviewModel
             .find(query)
@@ -286,7 +304,14 @@ export const getAllReviews = async (req, res) => {
         const { page = 1, limit = 20, businessType, rating } = req.query;
 
         const filter = { isActive: true };
-        if (businessType) filter.businessType = businessType;
+        if (businessType) {
+            const validType = Object.values(BUSINESS_TYPES).find(config => {
+                const typeLower = config.type.toLowerCase();
+                const inputLower = businessType.toLowerCase();
+                return typeLower === inputLower || (inputLower === 'cafe' && typeLower === 'cafes') || (inputLower === 'cafes' && typeLower === 'cafe');
+            });
+            filter.businessType = validType ? validType.type : businessType;
+        }
         if (rating) filter.rating = parseInt(rating);
 
         const reviews = await reviewModel

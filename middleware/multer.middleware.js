@@ -33,11 +33,14 @@ export const processAndUploadImages = async (req, res, next) => {
 
     if (!req.files || req.files.length === 0) return next();
 
+    let cityImageFile = null;
     const hotelImagesFiles = [];
     const roomImageGroups = {};
 
     req.files.forEach((file) => {
-      if (file.fieldname === "hotelImages") {
+      if (file.fieldname === "cityImage") {
+        cityImageFile = file;
+      } else if (file.fieldname === "hotelImages") {
         hotelImagesFiles.push(file);
       } else if (file.fieldname.startsWith("roomImages")) {
         const match = file.fieldname.match(/^roomImages[-_](\d+)$/);
@@ -49,21 +52,30 @@ export const processAndUploadImages = async (req, res, next) => {
       }
     });
 
-    req.files.hotelImages = await Promise.all(
-      hotelImagesFiles.map(async (file) => {
-        const buffer = await resizeImage(file.buffer, { width: 1024, height: 768, quality: 80 });
-        return await uploadToS3(buffer, file.originalname, file.mimetype, "hotels");
-      })
-    );
+    if (cityImageFile) {
+      const buffer = await resizeImage(cityImageFile.buffer, { width: 1024, height: 768, quality: 80 });
+      req.files.cityImage = await uploadToS3(buffer, cityImageFile.originalname, cityImageFile.mimetype, "cities");
+    }
 
-    req.files.roomImages = {};
-    for (const [roomIndex, files] of Object.entries(roomImageGroups)) {
-      req.files.roomImages[roomIndex] = await Promise.all(
-        files.map(async (file) => {
-          const buffer = await resizeImage(file.buffer, { width: 800, height: 600, quality: 80 });
-          return await uploadToS3(buffer, file.originalname, file.mimetype, "rooms");
+    if (hotelImagesFiles.length > 0) {
+      req.files.hotelImages = await Promise.all(
+        hotelImagesFiles.map(async (file) => {
+          const buffer = await resizeImage(file.buffer, { width: 1024, height: 768, quality: 80 });
+          return await uploadToS3(buffer, file.originalname, file.mimetype, "hotels");
         })
       );
+    }
+
+    if (Object.keys(roomImageGroups).length > 0) {
+      req.files.roomImages = {};
+      for (const [roomIndex, files] of Object.entries(roomImageGroups)) {
+        req.files.roomImages[roomIndex] = await Promise.all(
+          files.map(async (file) => {
+            const buffer = await resizeImage(file.buffer, { width: 800, height: 600, quality: 80 });
+            return await uploadToS3(buffer, file.originalname, file.mimetype, "rooms");
+          })
+        );
+      }
     }
 
     const amenityIconFiles = [];
@@ -85,17 +97,20 @@ export const processAndUploadImages = async (req, res, next) => {
       }
     });
 
-    req.files.amenityIconsMapped = {};
-
-    for (const [index, file] of Object.entries(amenityIconMap)) {
-      req.files.amenityIconsMapped[index] = await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+    if (Object.keys(amenityIconMap).length > 0) {
+      req.files.amenityIconsMapped = {};
+      for (const [index, file] of Object.entries(amenityIconMap)) {
+        req.files.amenityIconsMapped[index] = await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+      }
     }
 
-    req.files.amenityIconsArray = await Promise.all(
-      amenityIconFiles.map(async (file) => {
-        return await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
-      })
-    );
+    if (amenityIconFiles.length > 0) {
+      req.files.amenityIconsArray = await Promise.all(
+        amenityIconFiles.map(async (file) => {
+          return await uploadToS3(file.buffer, file.originalname, file.mimetype, "amenities");
+        })
+      );
+    }
 
     next();
   } catch (error) {

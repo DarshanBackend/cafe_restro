@@ -64,7 +64,7 @@ export const createNewCafe = async (req, res) => {
     }
 
     let finalAmenities = typeof amenities === "string" ? JSON.parse(amenities) : amenities || [];
-    
+
     for (const key in req.body) {
       const match = key.match(/^amenities\[(\d+)\]$/);
       if (match) {
@@ -322,15 +322,15 @@ export const getAllCafes = async (req, res) => {
     const reviewModel = mongoose.model("Review");
     const cafesWithStats = await Promise.all(cafes.map(async (cafe) => {
       const cafeObj = cafe.toObject();
-      const latestReviews = await reviewModel.find({ 
-        businessId: cafe._id, 
-        businessType: 'Cafes', 
-        isActive: true 
+      const latestReviews = await reviewModel.find({
+        businessId: cafe._id,
+        businessType: 'Cafes',
+        isActive: true
       })
-      .populate('userId', 'name avatar profilePicture')
-      .sort({ createdAt: -1 })
-      .limit(2)
-      .lean();
+        .populate('userId', 'name avatar profilePicture')
+        .sort({ createdAt: -1 })
+        .limit(2)
+        .lean();
 
       return {
         ...cafeObj,
@@ -505,7 +505,7 @@ export const updateCafe = async (req, res) => {
 
     if (body.amenities || Object.keys(req.body).some(k => k.startsWith('amenities['))) {
       let finalAmenities = safeParse(body.amenities, existingCafe.amenities) || [];
-      
+
       for (const key in req.body) {
         const match = key.match(/^amenities\[(\d+)\]$/);
         if (match) {
@@ -516,7 +516,7 @@ export const updateCafe = async (req, res) => {
       }
 
       finalAmenities = finalAmenities.map(am => typeof am === 'string' ? { name: am, icon: "" } : am);
-      
+
       const amenityIconFiles = [];
       const amenityIconMap = {};
 
@@ -798,7 +798,7 @@ export const searchCafes = async (req, res) => {
         { "location.city": searchRegex },
         { "location.state": searchRegex },
         { "location.country": searchRegex },
-        { amenities: { $in: [searchRegex] } },
+        { "amenities.name": { $in: [searchRegex] } },
         { services: { $in: [searchRegex] } }
       ]
     };
