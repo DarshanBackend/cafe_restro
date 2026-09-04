@@ -90,7 +90,7 @@ export const addToWatchlist = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Watchlist updated successfully",
+      message: "wishlist updated successfully",
       summary,
       result
     });

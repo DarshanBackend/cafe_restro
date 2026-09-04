@@ -143,8 +143,10 @@ export const getBusinessReviews = async (req, res) => {
         }
 
         const query = { businessId, isActive: true };
-        if (rating) query.rating = Number(rating);
-        if (businessType) {
+        if (rating && String(rating).toLowerCase() !== "all" && !isNaN(Number(rating))) {
+            query.rating = Number(rating);
+        }
+        if (businessType && String(businessType).toLowerCase() !== "all") {
             const validType = Object.values(BUSINESS_TYPES).find(config => {
                 const typeLower = config.type.toLowerCase();
                 const inputLower = businessType.toLowerCase();
@@ -304,7 +306,7 @@ export const getAllReviews = async (req, res) => {
         const { page = 1, limit = 20, businessType, rating } = req.query;
 
         const filter = { isActive: true };
-        if (businessType) {
+        if (businessType && String(businessType).toLowerCase() !== "all") {
             const validType = Object.values(BUSINESS_TYPES).find(config => {
                 const typeLower = config.type.toLowerCase();
                 const inputLower = businessType.toLowerCase();
@@ -312,7 +314,9 @@ export const getAllReviews = async (req, res) => {
             });
             filter.businessType = validType ? validType.type : businessType;
         }
-        if (rating) filter.rating = parseInt(rating);
+        if (rating && String(rating).toLowerCase() !== "all" && !isNaN(Number(rating))) {
+            filter.rating = parseInt(rating);
+        }
 
         const reviews = await reviewModel
             .find(filter)
