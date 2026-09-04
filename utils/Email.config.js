@@ -8,11 +8,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER || "hit.kalathiyainfotech@gmail.com",
     pass: process.env.EMAIL_PASS || "hpxi bdfr epnd pata",
   },
+  tls: {
+    rejectUnauthorized: false,
+  },
+  connectionTimeout: 15000,
 });
 
 transporter.use(

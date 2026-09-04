@@ -1,0 +1,4150 @@
+{
+  "info": {
+    "name": "Cafe Restro API",
+    "_postman_id": "f1f7c0fd-1b72-4c24-8d68-2ae7c1089a54",
+    "description": "Postman collection for Cafe Restro backend API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000/api",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "User",
+      "item": [
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"Password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/userRegister",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "userRegister"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Login User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"Password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/userLogin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "userLogin"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Google Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"google-id-token\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/googleLogin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "googleLogin"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Forgot OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/forgotOtp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "forgotOtp"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john@example.com\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/verifyOtp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "verifyOtp"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john@example.com\",\n  \"newPassword\": \"NewPassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/resetPassword",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "resetPassword"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getAllUsers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getAllUsers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get User By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getUserById/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getUserById",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "avatar",
+                  "type": "file",
+                  "src": ""
+                },
+                {
+                  "key": "name",
+                  "value": "John Doe",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateUser/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateUser",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get User Profile",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/userProfile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "userProfile"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "logout"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Change User Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"oldPassword\": \"Password123\",\n  \"newPassword\": \"NewPassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/changeUserPassword",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "changeUserPassword"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update FCM Token",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fcmToken\": \"your-fcm-token\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateFcmToken",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateFcmToken"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Wallet",
+      "item": [
+        {
+          "name": "Get Wallet Details",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/wallet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "wallet"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add Money To Wallet",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 1000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/wallet/addMoney",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "wallet",
+                "addMoney"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Verify Wallet Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentId\": \"pay_123\",\n  \"amount\": 1000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/wallet/verifyPayment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "wallet",
+                "verifyPayment"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Register Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"AdminPass123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/newAdminRegister",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "newAdminRegister"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"AdminPass123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/adminLogin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "adminLogin"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Admins",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/allAdmin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "allAdmin"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Admin By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getAdminById/:adminId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getAdminById",
+                ":adminId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Admin",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Admin Name\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/adminUpdate/:adminId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "adminUpdate",
+                ":adminId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Admin",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/deleteAdmin/:adminId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "deleteAdmin",
+                ":adminId"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Home",
+      "item": [
+        {
+          "name": "Whats New",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/WhatsNew",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "WhatsNew"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Trending Destinations",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/trending-destinations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "trending-destinations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Coffee Dates",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/coffee-dates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "coffee-dates"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Browse By Property Type",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/browse-by-property-type",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "browse-by-property-type"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Special Offers",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/special-offers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "special-offers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Luxury Stays",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/luxury-stays",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "luxury-stays"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Hotels",
+      "item": [
+        {
+          "name": "Create Hotel",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": ""
+                },
+                {
+                  "key": "name",
+                  "value": "Sample Hotel",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/createNewHotel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "createNewHotel"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Hotels",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getAllHotels",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getAllHotels"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Hotel By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getHotelById/:hotelId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getHotelById",
+                ":hotelId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Hotel",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateHotel/:hotelId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateHotel",
+                ":hotelId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Hotel",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/deleteHotel/:hotelId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "deleteHotel",
+                ":hotelId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Hotel By City Name",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getHotelByCityName/:name",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getHotelByCityName",
+                ":name"
+              ]
+            }
+          }
+        },
+        {
+          "name": "City Suggestions",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/city-suggestions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "city-suggestions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Hotel Booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomType\": \"deluxe\",\n  \"checkIn\": \"2026-06-01\",\n  \"checkOut\": \"2026-06-05\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/hotel/createBooking/:hotelId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "hotel",
+                "createBooking",
+                ":hotelId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Hotel Preview Booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomType\": \"deluxe\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/hotel/previewBooking/:hotelId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "hotel",
+                "previewBooking",
+                ":hotelId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get My Hotel Bookings",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/hotel/MyBookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "hotel",
+                "MyBookings"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Hotel Admin Bookings",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/HotelAdminBookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "HotelAdminBookings"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Hotel Payment Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"paid\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/hotel/updatePaymentStatus/:bookingId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "hotel",
+                "updatePaymentStatus",
+                ":bookingId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Hotel Booking Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"confirmed\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/hotel/updateBookingStatus/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "hotel",
+                "updateBookingStatus",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel Hotel Booking",
+          "request": {
+            "method": "PUT",
+            "url": {
+              "raw": "{{baseUrl}}/hotel/cancel/:bookingId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "hotel",
+                "cancel",
+                ":bookingId"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Watchlist",
+      "item": [
+        {
+          "name": "Add To Watchlist",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemId\": \"123\",\n  \"type\": \"hotel\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addToWatchlist",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addToWatchlist"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Watchlist",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getWatchlist",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getWatchlist"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Remove From Watchlist",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemId\": \"123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/removeFromWatchlist",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "removeFromWatchlist"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cafe",
+      "item": [
+        {
+          "name": "Cafe Themes",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/cafeThemes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cafeThemes"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Cafes By Theme",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getCafesByTheme",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getCafesByTheme"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Cafes",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getAllCafes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getAllCafes"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Search Cafes",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "search"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Main Search Cafes",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/mainSearchCafes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mainSearchCafes"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Cafes By Location",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/location",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "location"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Popular Cafes",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/popular",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "popular"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Cafe By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getCafeById/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getCafeById",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Cafe",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": ""
+                },
+                {
+                  "key": "name",
+                  "value": "Sample Cafe",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/createCafe",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "createCafe"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Cafe",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateCafe/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateCafe",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Cafe",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/deleteCafe/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "deleteCafe",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add Cafe Images",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addCafeImage/:id/images",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addCafeImage",
+                ":id",
+                "images"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Remove Cafe Image",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/removeCafeImage/:id/images/:imageUrl",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "removeCafeImage",
+                ":id",
+                "images",
+                ":imageUrl"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cafe Bookings",
+      "item": [
+        {
+          "name": "Create Cafe Booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingDate\": \"2026-06-10\",\n  \"guests\": 4\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/createCafeBooking/:cafeId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "createCafeBooking",
+                ":cafeId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get My Cafe Bookings",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/my-cafe-bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-cafe-bookings"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Booking By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getBookingById/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getBookingById",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel Booking",
+          "request": {
+            "method": "PUT",
+            "url": {
+              "raw": "{{baseUrl}}/cancelBooking/:bookingId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cancelBooking",
+                ":bookingId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Preview Cafe Booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"guests\": 4\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/preview-booking/:cafeId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "preview-booking",
+                ":cafeId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Cafe Bookings (Admin)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/cafe/:cafeId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cafe",
+                ":cafeId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Cafe Booking Status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"confirmed\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cafe/updateBookingStatus/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cafe",
+                "updateBookingStatus",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Cafe Payment Status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"paid\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cafe/updatePaymentStatus/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cafe",
+                "updatePaymentStatus",
+                ":id"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Restaurants",
+      "item": [
+        {
+          "name": "Create Restaurant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": ""
+                },
+                {
+                  "key": "name",
+                  "value": "Sample Restaurant",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/createNewRestro",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "createNewRestro"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Restaurants",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getAllRestros",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getAllRestros"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Restaurant By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getRestroById/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getRestroById",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Restaurant",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateRestro/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateRestro",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add Restaurant Image",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addRestroImage/:id/images",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addRestroImage",
+                ":id",
+                "images"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Remove Restaurant Image",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/removeRestroImage/:id/images/:imageUrl",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "removeRestroImage",
+                ":id",
+                "images",
+                ":imageUrl"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Restaurant",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/deleteRestro/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "deleteRestro",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Advanced Restaurant Filter",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/resto/filter/advanced",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "resto",
+                "filter",
+                "advanced"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Search Restaurants",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/restro/search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restro",
+                "search"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Change Restaurant Status",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/restro/changeStatus/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restro",
+                "changeStatus",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Popular Restaurants",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/restro/popular",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restro",
+                "popular"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Restaurants By Theme",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getRestrosByTheme",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getRestrosByTheme"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Restaurant Bookings",
+      "item": [
+        {
+          "name": "Preview Restaurant Booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"guests\": 4\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/restro/preview-booking/:restaurantId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restro",
+                "preview-booking",
+                ":restaurantId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Restaurant Booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingDate\": \"2026-06-12\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/createRestroBooking/:restaurantId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "createRestroBooking",
+                ":restaurantId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get My Restaurant Bookings",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/my-restro-bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-restro-bookings"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Restaurant Booking By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getRestaurantBookingById/:bookingId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getRestaurantBookingById",
+                ":bookingId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel Restaurant Booking",
+          "request": {
+            "method": "PUT",
+            "url": {
+              "raw": "{{baseUrl}}/cancelRestroBooking/:bookingId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cancelRestroBooking",
+                ":bookingId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Restaurant Bookings (Admin)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/restro/:restroId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restro",
+                ":restroId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Restaurant Booking Status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"confirmed\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateRestroBookingStatus/:bookingId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateRestroBookingStatus",
+                ":bookingId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Restaurant Payment Status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"paid\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateRestroPaymentStatus/:bookingId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateRestroPaymentStatus",
+                ":bookingId"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Halls",
+      "item": [
+        {
+          "name": "Get All Halls",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getAllHalls",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getAllHalls"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Popular Halls",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getPopularHalls",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getPopularHalls"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Hall By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getHallById/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getHallById",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Preview Hall Billing",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date\": \"2026-06-15\",\n  \"hours\": 4\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/preview/billing/:hallId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "preview",
+                "billing",
+                ":hallId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Hall",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": ""
+                },
+                {
+                  "key": "name",
+                  "value": "Sample Hall",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/createHall",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "createHall"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Hall",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateHall/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateHall",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Hall",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/deleteHall/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "deleteHall",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Hall Booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingDate\": \"2026-06-20\",\n  \"durationHours\": 6\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/createHallBooking/:hallId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "createHallBooking",
+                ":hallId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get My Hall Bookings",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/myHallbookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "myHallbookings"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Hall Booking By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getHallBookingById/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getHallBookingById",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel Hall Booking",
+          "request": {
+            "method": "PUT",
+            "url": {
+              "raw": "{{baseUrl}}/cancelHallBooking/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cancelHallBooking",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Admin Hall Booking Statistics",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/admin/hallBookingStatistics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "hallBookingStatistics"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Admin Hall Bookings",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/admin/hallBookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "hallBookings"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Hall Booking Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"confirmed\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateHallBookingStatus/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateHallBookingStatus",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Hall Payment Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"paid\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateHallPaymentStatus/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateHallPaymentStatus",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Hall Check In",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{baseUrl}}/admin/hall/check-in/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "hall",
+                "check-in",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Hall Check Out",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{baseUrl}}/admin/hall/check-out/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "hall",
+                "check-out",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Admin Hall Booking By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/admin/getHallBookingById/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "getHallBookingById",
+                ":id"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Activities",
+      "item": [
+        {
+          "name": "Get All Countries",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/allCountries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "allCountries"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get City By Country",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getCityByCountry/:country",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getCityByCountry",
+                ":country"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Hotel By City",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getHotelByCity/:city",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getHotelByCity",
+                ":city"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Search Hotels",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/searchHotels",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "searchHotels"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Main Search Hotels",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/mainSearchHotels",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mainSearchHotels"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Featured Events",
+      "item": [
+        {
+          "name": "Get All Featured Events",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getAllFeaturedEvents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getAllFeaturedEvents"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Featured Event By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getFeaturedEventById/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getFeaturedEventById",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Featured Event",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": ""
+                },
+                {
+                  "key": "title",
+                  "type": "text",
+                  "value": "New Event"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addNewFeaturedEvent",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addNewFeaturedEvent"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Featured Event",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateFeaturedEvent/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateFeaturedEvent",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Featured Event",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/deleteFeaturedEvent/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "deleteFeaturedEvent",
+                ":id"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Events",
+      "item": [
+        {
+          "name": "Get All Events",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getAllEvents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getAllEvents"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Search Events",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/searchEvents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "searchEvents"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Filter Events",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/filterEvents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "filterEvents"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Event Stats",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getEventStats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getEventStats"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Event By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getEventById/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getEventById",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Event",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "eventImage",
+                  "type": "file",
+                  "src": ""
+                },
+                {
+                  "key": "title",
+                  "type": "text",
+                  "value": "New Event"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addNewEvent",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addNewEvent"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Event",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "eventImage",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateEvent/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateEvent",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Event",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/deleteEvent/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "deleteEvent",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Bulk Delete Events",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ids\": [\"id1\", \"id2\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/bulk-delete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "bulk-delete"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tours",
+      "item": [
+        {
+          "name": "Create Tour",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": ""
+                },
+                {
+                  "key": "title",
+                  "type": "text",
+                  "value": "New Tour"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/createNewTour",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "createNewTour"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Tours",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getAllTours",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getAllTours"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Best Offer Tours",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/tour/best-offers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tour",
+                "best-offers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Tour By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getTourById/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getTourById",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Tour",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateTour/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateTour",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Tour Image",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateTourImage/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateTourImage",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Tour",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/deleteTour/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "deleteTour",
+                ":id"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payments & Bookings",
+      "item": [
+        {
+          "name": "Get Payments and Refunds",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/payments-and-refunds",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments-and-refunds"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Unified Bookings",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/myBookings/unified",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "myBookings",
+                "unified"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Download Invoice",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/download-invoice/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "download-invoice",
+                ":id"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reviews",
+      "item": [
+        {
+          "name": "Add Review",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "media",
+                  "type": "file",
+                  "src": ""
+                },
+                {
+                  "key": "rating",
+                  "type": "text",
+                  "value": "5"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addReview/:businessId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addReview",
+                ":businessId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get My Reviews",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/myReview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "myReview"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Review",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/review/delete/:reviewId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "review",
+                "delete",
+                ":reviewId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Business Reviews",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/review/business/:businessId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "review",
+                "business",
+                ":businessId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Like Review",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/review/like/:reviewId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "review",
+                "like",
+                ":reviewId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Dislike Review",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/review/dislike/:reviewId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "review",
+                "dislike",
+                ":reviewId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Reviews",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getAllReviews",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getAllReviews"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Coupons",
+      "item": [
+        {
+          "name": "Create Coupon",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SAVE10\",\n  \"discount\": 10\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/createCoupan",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "createCoupan"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Coupons",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getAllCoupans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getAllCoupans"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Coupon By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getCoupanById/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getCoupanById",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Coupon",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"discount\": 15\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateCoupan/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateCoupan",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Coupon",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/deleteCoupan/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "deleteCoupan",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Toggle Coupon Status",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{baseUrl}}/toggleCoupanStatus/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "toggleCoupanStatus",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Apply Coupon",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SAVE10\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/applyCoupon",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "applyCoupon"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Remove Coupon",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SAVE10\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/removeCoupon",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "removeCoupon"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Offers",
+      "item": [
+        {
+          "name": "Create Offer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "backgroundImage",
+                  "type": "file",
+                  "src": ""
+                },
+                {
+                  "key": "title",
+                  "type": "text",
+                  "value": "New Offer"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/createOffer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "createOffer"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Offers",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getAllOffers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getAllOffers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Offer By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getOfferById/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getOfferById",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Offer",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "backgroundImage",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateOffer/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateOffer",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Offer",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/deleteOffer/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "deleteOffer",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Toggle Offer Status",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{baseUrl}}/toggleOfferStatus/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "toggleOfferStatus",
+                ":id"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Stays",
+      "item": [
+        {
+          "name": "Create Stay",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": ""
+                },
+                {
+                  "key": "name",
+                  "type": "text",
+                  "value": "Sample Stay"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/createStay",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "createStay"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Stay",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateStay/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateStay",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Stay",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/deleteStay/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "deleteStay",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Admin Stays",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getAdminStays",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getAdminStays"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Admin Stay Bookings",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/admin/stayBookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "stayBookings"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Admin Stay Booking By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/admin/getStayBookingById/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "getStayBookingById",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Stay Booking Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"confirmed\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateStayBookingStatus/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateStayBookingStatus",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Stay Payment Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"paid\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateStayPaymentStatus/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateStayPaymentStatus",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Stays",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getAllStays",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getAllStays"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Stay By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getStayById/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getStayById",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Search Stay",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/searchStay",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "searchStay"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Preview Stay Booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nights\": 3\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/stay/preview-booking/:stayId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stay",
+                "preview-booking",
+                ":stayId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Stay Booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"checkIn\": \"2026-07-01\",\n  \"nights\": 3\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/createStayBooking/:stayId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "createStayBooking",
+                ":stayId"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get My Stay Bookings",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/my-stay-bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-stay-bookings"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Stay Booking By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getStayBookingById/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getStayBookingById",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel Stay Booking",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{baseUrl}}/cancelStayBooking/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cancelStayBooking",
+                ":id"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Create Notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": ""
+                },
+                {
+                  "key": "message",
+                  "type": "text",
+                  "value": "New notification text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/createNotification",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "createNotification"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Notifications",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getAllNotifications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getAllNotifications"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Notification By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getNotificationById/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getNotificationById",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Notification",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateNotification/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateNotification",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Notification",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/deleteNotification/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "deleteNotification",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get My Notifications",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/my/notifications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my",
+                "notifications"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mark Notification As Read",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{baseUrl}}/markNotificationAsRead/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "markNotificationAsRead",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete My Notification",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/deleteMyNotification/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "deleteMyNotification",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get My Notification Settings",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/myNotificationSettings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "myNotificationSettings"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update My Notification Settings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emailNotifications\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateMyNotificationSettings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateMyNotificationSettings"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Theme Categories",
+      "item": [
+        {
+          "name": "Create Theme Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": ""
+                },
+                {
+                  "key": "name",
+                  "type": "text",
+                  "value": "Cafe Theme"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/createThemeCategory",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "createThemeCategory"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Theme Categories",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getAllThemeCategories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getAllThemeCategories"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Theme Category By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getThemeCategory/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getThemeCategory",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Themes By Area",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getThemesByArea",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getThemesByArea"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Theme Category",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateThemeCategory/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateThemeCategory",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Theme Category",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/deleteThemeCategory/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "deleteThemeCategory",
+                ":id"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "FAQ",
+      "item": [
+        {
+          "name": "Create FAQ",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"What is your refund policy?\",\n  \"answer\": \"Refunds are processed within 7 days.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/createFaq",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "createFaq"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All FAQs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getAllFaqs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getAllFaqs"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get FAQ By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/getFaqById/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "getFaqById",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update FAQ",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answer\": \"Refunds are completed within 5 business days.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/updateFaq/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "updateFaq",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete FAQ",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/deleteFaq/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "deleteFaq",
+                ":id"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "S3",
+      "item": [
+        {
+          "name": "List S3 Images",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/s3/list",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "s3",
+                "list"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete S3 Image",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"imageUrl\": \"https://bucket.s3.amazonaws.com/path/to/image.jpg\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/s3/delete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "s3",
+                "delete"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Multiple S3 Images",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"images\": [\"https://bucket.s3.amazonaws.com/path/to/image1.jpg\", \"https://bucket.s3.amazonaws.com/path/to/image2.jpg\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/s3/delete-multiple",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "s3",
+                "delete-multiple"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

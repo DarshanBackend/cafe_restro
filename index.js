@@ -5,11 +5,17 @@ import log from './utils/logger.js';
 import connectDB from './db/connectDB.js';
 import indexRouter from './routes/index.route.js';
 import morgan from 'morgan';
+import dns from "dns";
+// const dns = require('dns/promises');
+
 
 //.env 
 config();
 const PORT = process.env.PORT || 8000;
 const DB_URL = process.env.DB_URL
+
+// dns.setServers(['8.8.8.8', '8.8.4.4']);
+dns.setServers(['1.1.1.1', '8.8.8.8']);
 
 const app = express();
 connectDB(DB_URL);
@@ -24,31 +30,26 @@ app.get("/", async (req, res) => {
   return res.send("<h2>congratulations Cafe & Restro Api's Is Woring </h2>")
 });
 
-// Global Response Formatting Middleware
+
 app.use((req, res, next) => {
   const originalJson = res.json;
   res.json = function (obj) {
     if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
       if (obj.success !== undefined) {
-        
+
         if (obj.message === undefined) {
           obj.message = obj.success ? "Success" : "Failed";
         }
 
-        if (obj.data !== undefined && obj.result === undefined) {
-          obj.result = obj.data;
-          delete obj.data;
+        // Change result to data
+        if (obj.result !== undefined && obj.data === undefined) {
+          obj.data = obj.result;
+          delete obj.result;
         }
 
-        if (obj.result === undefined && obj.success) {
-           obj.result = [];
-        }
-
-        if (obj.result !== undefined) {
-          if (!Array.isArray(obj.result)) {
-            obj.result = [obj.result];
-          }
-          obj.length = obj.result.length;
+        // Remove length
+        if (obj.length !== undefined) {
+          delete obj.length;
         }
       }
     }
